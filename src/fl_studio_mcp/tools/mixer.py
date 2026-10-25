@@ -496,7 +496,7 @@ def register_mixer_tools(mcp: FastMCP) -> None:
         return f"Track {track} slot {slot} ({name}) is now {'on' if enabled else 'bypassed'}"
 
     @mcp.tool()
-    def fl_get_track_routing(track: int) -> dict:
+    def fl_get_track_routing_detailed(track: int) -> dict:
         """Show where a mixer track's audio goes and which tracks feed into it.
 
         Args:
@@ -520,7 +520,7 @@ def register_mixer_tools(mcp: FastMCP) -> None:
         }
 
     @mcp.tool()
-    def fl_route_track(
+    def fl_route_track_advanced(
         src_track: int,
         dst_track: int,
         enabled: bool = True,

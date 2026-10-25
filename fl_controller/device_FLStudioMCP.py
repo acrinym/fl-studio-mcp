@@ -47,6 +47,9 @@ def _get_script_dir() -> Path:
         # Windows
         userprofile = os.environ.get("USERPROFILE", "~")
         base = Path(userprofile) / "Documents" / "Image-Line" / "FL Studio" / "Settings"
+        onedrive = Path(userprofile) / "OneDrive" / "Documents" / "Image-Line" / "FL Studio" / "Settings"
+        if (onedrive / "Hardware" / "FLStudioMCP" / "device_FLStudioMCP.py").is_file():
+            base = onedrive
     else:
         # Linux (unlikely but handle it)
         base = Path.home() / "Documents" / "Image-Line" / "FL Studio" / "Settings"
@@ -1450,6 +1453,11 @@ def handle_mixer_get_routing(params: dict) -> dict:
     return {
         "track": track,
         "track_name": mixer.getTrackName(track),
+        "name": mixer.getTrackName(track),
+        "routes_to": [
+            {"track": item["track"], "name": item["name"]}
+            for item in _routes_from(track)
+        ],
         "sends_to": _routes_from(track),
         "receives_from": receives_from,
     }

@@ -278,7 +278,7 @@ class MIDIConnection:
         while time.time() - start_time < timeout:
             if self._response_file.exists():
                 try:
-                    response_text = self._response_file.read_text()
+                    response_text = self._response_file.read_text(encoding="utf-8")
                     response = json.loads(response_text)
                     if not isinstance(response, dict):
                         raise ValueError(f"unexpected JSON type {type(response).__name__}")
