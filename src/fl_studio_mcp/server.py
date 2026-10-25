@@ -12,7 +12,7 @@ Requirements:
 - For piano roll: ComposeWithLLM.pyscript installed in FL Studio
 
 Limitations:
-- Cannot load new plugins (only control existing ones)
+- Can load effects into mixer slots, but not instruments into the channel rack
 - Cannot create new patterns programmatically
 """
 
@@ -47,7 +47,7 @@ Available tool categories:
 - Transport: Play, stop, record, tempo, metronome, position control
 - Mixer: Volume, pan, mute, solo, routing, peak meters, insert FX slots
 - Channels: Channel info, note triggering, step sequencer
-- Plugins: Parameter control, preset navigation (cannot load new plugins)
+- Plugins: Parameter control, preset navigation, plugin database search, mixer FX loading
 - Piano roll: Add/delete/read notes, chords, piano roll context
 - Composition: Diatonic chord progressions, humanize (velocity/timing/swing)
 - Patterns: List, select, create, clone, rename
@@ -57,8 +57,9 @@ Available tool categories:
 - Project snapshot: Whole-project overview in one round-trip
 
 Important limitations:
-1. Cannot load new VST/AU plugins - only control existing ones
-2. Cannot place clips on the playlist or create automation clips
+1. Effects can be loaded into mixer slots, but new instruments cannot be added to the channel rack.
+2. Cannot place clips on the playlist or create automation clips.
+Mixer effect slots have separate Mix (dry/wet) and bypass controls.
 3. Note triggering (fl_trigger_note) is real-time only - notes won't persist
    unless FL Studio is recording. Use step sequencer (fl_set_grid_bit) or the
    piano roll tools for persistent notes.
