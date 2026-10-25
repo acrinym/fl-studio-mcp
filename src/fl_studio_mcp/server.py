@@ -29,6 +29,7 @@ from fl_studio_mcp.tools import (
     register_piano_roll_tools,
     register_playlist_tools,
     register_plugin_tools,
+    register_project_file_tools,
     register_transport_tools,
     register_ui_tools,
 )
@@ -158,6 +159,7 @@ register_pattern_tools(mcp)
 register_ui_tools(mcp)
 register_playlist_tools(mcp)
 register_compose_tools(mcp)
+register_project_file_tools(mcp)
 
 
 def main():
