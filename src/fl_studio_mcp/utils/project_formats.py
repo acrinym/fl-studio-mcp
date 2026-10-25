@@ -3,11 +3,14 @@
 This is deliberately not a serializer: unknown FL Studio events and proprietary
 plugin chunks must never be silently rewritten.
 """
+
 from __future__ import annotations
 
 import struct
 import zipfile
 from pathlib import Path
+
+from fl_studio_mcp.utils.fl_events import FORMAT_NAMES, inspect_event_stream
 
 MAX_FILE_BYTES = 128 * 1024 * 1024
 MAX_ZIP_MEMBERS = 2048
@@ -22,7 +25,7 @@ def _fl_header(data: bytes) -> dict:
     if header_size < 6 or header_size > 4096:
         raise ValueError("Invalid FLhd header size")
     data_offset = 8 + header_size
-    if len(data) < data_offset + 8 or data[data_offset:data_offset + 4] != b"FLdt":
+    if len(data) < data_offset + 8 or data[data_offset : data_offset + 4] != b"FLdt":
         raise ValueError("Missing FLdt chunk")
     declared = struct.unpack_from("<I", data, data_offset + 4)[0]
     remaining = len(data) - (data_offset + 8)
@@ -32,12 +35,17 @@ def _fl_header(data: bytes) -> dict:
         "signature": "FLhd",
         "header_size": header_size,
         "format_code": struct.unpack_from("<H", data, 8)[0],
+        "format_name": FORMAT_NAMES.get(struct.unpack_from("<H", data, 8)[0], "unknown"),
         "channel_count": struct.unpack_from("<H", data, 10)[0],
         "ppq": struct.unpack_from("<H", data, 12)[0],
         "event_data_bytes": declared,
         "size_bytes": len(data),
         "valid_framing": True,
-        "unknown_events_preserved": "not decoded or modified",
+        "unknown_events_preserved": "no file or opaque plugin bytes modified",
+        "event_summary": inspect_event_stream(
+            data[data_offset + 8 :],
+            format_code=struct.unpack_from("<H", data, 8)[0],
+        ),
     }
 
 
@@ -71,14 +79,14 @@ def inspect_fl_studio_file(path: str) -> dict:
             if len(data) > MAX_FILE_BYTES:
                 raise ValueError("Embedded FLP exceeds inspection limit")
             projects.append({"member": entry.filename, **_fl_header(data)})
+        if not projects:
+            raise ValueError("ZIP contains no FL Studio .flp project")
         return {
             "path": str(file),
             "kind": "zipped_project",
             "member_count": len(members),
-            "members": [
-                {"name": item.filename, "bytes": item.file_size}
-                for item in members
-            ],
+            "members": [{"name": item.filename, "bytes": item.file_size} for item in members[:100]],
+            "members_truncated": len(members) > 100,
             "projects": projects,
             "read_only": True,
         }

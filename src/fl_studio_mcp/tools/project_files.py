@@ -1,4 +1,5 @@
 """Read-only native FL Studio project and preset inspection."""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -14,7 +15,8 @@ def register_project_file_tools(mcp: FastMCP) -> None:
     def fl_inspect_native_file(path: str) -> dict:
         """Inspect an FLP, FST or zipped FL Studio project, without editing it.
 
-        Returns container framing and ZIP members, not decoded plugin parameters.
+        Returns validated framing, format classification, structural FL events,
+        and ZIP members; proprietary plugin parameter data stays opaque.
         This tool never loads a plugin, changes a preset or modifies a project.
         """
         try:

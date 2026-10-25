@@ -1,4 +1,5 @@
 """Native container inspection must remain read-only and reject damaged framing."""
+
 import struct
 import zipfile
 
@@ -7,10 +8,13 @@ import pytest
 from fl_studio_mcp.utils.project_formats import inspect_fl_studio_file
 
 
-def flp(payload=b"\xc7\x07\x00"):
+def flp(payload=b"\xc7\x05" + b"24.1\x00"):
     return (
-        b"FLhd" + struct.pack("<IHHH", 6, 0, 1, 96)
-        + b"FLdt" + struct.pack("<I", len(payload)) + payload
+        b"FLhd"
+        + struct.pack("<IHHH", 6, 0, 1, 96)
+        + b"FLdt"
+        + struct.pack("<I", len(payload))
+        + payload
     )
 
 
@@ -20,7 +24,9 @@ def test_flp_header(tmp_path):
     result = inspect_fl_studio_file(str(file))
     assert result["kind"] == "flp"
     assert result["ppq"] == 96
-    assert result["event_data_bytes"] == 3
+    assert result["event_data_bytes"] == 7
+    assert result["event_summary"]["fl_version"] == "24.1"
+    assert result["format_name"] == "project"
     assert file.read_bytes() == flp()
 
 
