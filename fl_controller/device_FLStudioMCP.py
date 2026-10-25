@@ -47,7 +47,10 @@ def _get_script_dir() -> Path:
         # Windows
         userprofile = os.environ.get("USERPROFILE", "~")
         base = Path(userprofile) / "Documents" / "Image-Line" / "FL Studio" / "Settings"
-        onedrive = Path(userprofile) / "OneDrive" / "Documents" / "Image-Line" / "FL Studio" / "Settings"
+        onedrive = (
+            Path(userprofile) / "OneDrive" / "Documents" / "Image-Line"
+            / "FL Studio" / "Settings"
+        )
         if (onedrive / "Hardware" / "FLStudioMCP" / "device_FLStudioMCP.py").is_file():
             base = onedrive
     else:
