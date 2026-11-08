@@ -12,6 +12,7 @@ from pathlib import Path
 
 from fl_studio_mcp.utils.channel_graph import inspect_channel_graph
 from fl_studio_mcp.utils.fl_events import FORMAT_NAMES, inspect_event_stream
+from fl_studio_mcp.utils.mixer_graph import MAX_MIXER_INSERT_RESULT, inspect_mixer_graph
 from fl_studio_mcp.utils.pattern_graph import MAX_NOTE_RESULT, inspect_pattern_note_graph
 from fl_studio_mcp.utils.playlist_graph import MAX_CLIP_RESULT, inspect_playlist_graph
 
@@ -28,6 +29,8 @@ def _fl_header(
     include_playlist_graph: bool = False,
     max_clips: int = 512,
     include_channel_graph: bool = False,
+    include_mixer_graph: bool = False,
+    max_mixer_inserts: int = 32,
 ) -> dict:
     """Validate FLhd/FLdt framing and optionally decode relationships."""
     if len(data) < 22 or data[:4] != b"FLhd":
@@ -58,6 +61,15 @@ def _fl_header(
             format_code=struct.unpack_from("<H", data, 8)[0],
         ),
     }
+    if include_mixer_graph:
+        if result["format_code"] in (0, 64):
+            result["mixer_graph"] = inspect_mixer_graph(
+                data[data_offset + 8 :],
+                fl_version=result["event_summary"]["fl_version"],
+                max_mixer_inserts=max_mixer_inserts,
+            )
+        else:
+            result["mixer_graph_skipped"] = "Not a project or mixer insert-state container"
     if include_channel_graph:
         if result["format_code"] in (0, 32):
             result["channel_graph"] = inspect_channel_graph(
@@ -93,6 +105,8 @@ def inspect_fl_studio_file(
     include_playlist_graph: bool = False,
     max_clips: int = 512,
     include_channel_graph: bool = False,
+    include_mixer_graph: bool = False,
+    max_mixer_inserts: int = 32,
 ) -> dict:
     """Inspect FLP, FST and zipped projects without extraction or mutation."""
     if type(include_note_graph) is not bool:
@@ -103,6 +117,12 @@ def inspect_fl_studio_file(
         raise ValueError("include_playlist_graph must be a boolean")
     if type(include_channel_graph) is not bool:
         raise ValueError("include_channel_graph must be a boolean")
+    if type(include_mixer_graph) is not bool:
+        raise ValueError("include_mixer_graph must be a boolean")
+    if type(max_mixer_inserts) is not int or not 0 <= max_mixer_inserts <= MAX_MIXER_INSERT_RESULT:
+        raise ValueError(
+            f"max_mixer_inserts must be an integer from 0 through {MAX_MIXER_INSERT_RESULT}"
+        )
     if type(max_clips) is not int or not 0 <= max_clips <= MAX_CLIP_RESULT:
         raise ValueError(f"max_clips must be an integer from 0 through {MAX_CLIP_RESULT}")
     file = Path(path).expanduser().resolve(strict=True)
@@ -123,6 +143,8 @@ def inspect_fl_studio_file(
                 include_playlist_graph=include_playlist_graph,
                 max_clips=max_clips,
                 include_channel_graph=include_channel_graph,
+                include_mixer_graph=include_mixer_graph,
+                max_mixer_inserts=max_mixer_inserts,
             ),
         }
     if suffix != ".zip":
@@ -151,7 +173,10 @@ def inspect_fl_studio_file(
                 if len(data) > MAX_FILE_BYTES:
                     raise ValueError("Embedded FLP exceeds inspection limit")
                 graph_selected = (
-                    include_note_graph or include_playlist_graph or include_channel_graph
+                    include_note_graph
+                    or include_playlist_graph
+                    or include_channel_graph
+                    or include_mixer_graph
                 ) and len(projects) < 4
                 project = {
                     "member": entry.filename,
@@ -162,6 +187,8 @@ def inspect_fl_studio_file(
                         include_playlist_graph=graph_selected and include_playlist_graph,
                         max_clips=max_clips,
                         include_channel_graph=graph_selected and include_channel_graph,
+                        include_mixer_graph=graph_selected and include_mixer_graph,
+                        max_mixer_inserts=max_mixer_inserts,
                     ),
                 }
                 if include_note_graph and not graph_selected:
@@ -172,6 +199,8 @@ def inspect_fl_studio_file(
                     )
                 if include_channel_graph and not graph_selected:
                     project["channel_graph_skipped"] = "Graph inspection limited to first 4 members"
+                if include_mixer_graph and not graph_selected:
+                    project["mixer_graph_skipped"] = "Graph inspection limited to first 4 members"
                 projects.append(project)
             except (ValueError, zipfile.BadZipFile, EOFError, OSError) as exc:
                 # A corrupt member must not hide other healthy projects.
