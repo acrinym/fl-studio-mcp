@@ -11,7 +11,7 @@ import zipfile
 from pathlib import Path
 
 from fl_studio_mcp.utils.fl_events import FORMAT_NAMES, inspect_event_stream
-from fl_studio_mcp.utils.pattern_graph import inspect_pattern_note_graph
+from fl_studio_mcp.utils.pattern_graph import MAX_NOTE_RESULT, inspect_pattern_note_graph
 
 MAX_FILE_BYTES = 128 * 1024 * 1024
 MAX_ZIP_MEMBERS = 2048
@@ -48,10 +48,13 @@ def _fl_header(data: bytes, *, include_note_graph: bool = False, max_notes: int 
             format_code=struct.unpack_from("<H", data, 8)[0],
         ),
     }
-    if include_note_graph and result["format_code"] in (0, 16):
-        result["note_graph"] = inspect_pattern_note_graph(
-            data[data_offset + 8 :], ppq=result["ppq"], max_notes=max_notes
-        )
+    if include_note_graph:
+        if result["format_code"] in (0, 16):
+            result["note_graph"] = inspect_pattern_note_graph(
+                data[data_offset + 8 :], ppq=result["ppq"], max_notes=max_notes
+            )
+        else:
+            result["note_graph_skipped"] = "Not a project or score container"
     return result
 
 
@@ -61,8 +64,8 @@ def inspect_fl_studio_file(
     """Inspect FLP, FST and zipped projects without extraction or mutation."""
     if type(include_note_graph) is not bool:
         raise ValueError("include_note_graph must be a boolean")
-    if type(max_notes) is not int or not 0 <= max_notes <= 4096:
-        raise ValueError("max_notes must be an integer from 0 through 4096")
+    if type(max_notes) is not int or not 0 <= max_notes <= MAX_NOTE_RESULT:
+        raise ValueError(f"max_notes must be an integer from 0 through {MAX_NOTE_RESULT}")
     file = Path(path).expanduser().resolve(strict=True)
     if not file.is_file():
         raise ValueError("Expected a regular file")

@@ -35,6 +35,7 @@ def inspect_pattern_note_graph(data: bytes, *, ppq: int, max_notes: int = 1024) 
     returned = 0
     total = 0
     extra_patterns = 0
+    unrecognized_note_blocks = 0
 
     while offset < len(data):
         if event_count >= MAX_EVENTS:
@@ -68,7 +69,10 @@ def inspect_pattern_note_graph(data: bytes, *, ppq: int, max_notes: int = 1024) 
                     }
         elif event_id == 224:
             if size % _NOTE.size:
-                raise ValueError("Unrecognized FL Studio note record layout")
+                # Unknown FL versions must not hide otherwise valid project data.
+                unrecognized_note_blocks += 1
+                offset = end
+                continue
             note_count = size // _NOTE.size
             total += note_count
             if current_pattern is None:
@@ -122,8 +126,9 @@ def inspect_pattern_note_graph(data: bytes, *, ppq: int, max_notes: int = 1024) 
         "patterns_over_limit": extra_patterns,
         "total_note_count": total,
         "unattributed_note_count": orphans,
+        "note_blocks_unrecognized_layout": unrecognized_note_blocks,
         "notes_returned": returned,
-        "notes_truncated": returned < total,
+        "notes_truncated": returned < (total - orphans),
         "read_only": True,
         "limitations": (
             "Pattern-to-channel note associations only; no playlist clip, "
