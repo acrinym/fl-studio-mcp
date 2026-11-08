@@ -11,14 +11,15 @@ import zipfile
 from pathlib import Path
 
 from fl_studio_mcp.utils.fl_events import FORMAT_NAMES, inspect_event_stream
+from fl_studio_mcp.utils.pattern_graph import inspect_pattern_note_graph
 
 MAX_FILE_BYTES = 128 * 1024 * 1024
 MAX_ZIP_MEMBERS = 2048
 MAX_ZIP_TOTAL_BYTES = 512 * 1024 * 1024
 
 
-def _fl_header(data: bytes) -> dict:
-    """Validate FLhd and FLdt framing without interpreting undocumented events."""
+def _fl_header(data: bytes, *, include_note_graph: bool = False, max_notes: int = 1024) -> dict:
+    """Validate FLhd/FLdt framing and optionally decode pattern-note relationships."""
     if len(data) < 22 or data[:4] != b"FLhd":
         raise ValueError("Not an FL Studio FLhd container")
     header_size = struct.unpack_from("<I", data, 4)[0]
@@ -31,7 +32,7 @@ def _fl_header(data: bytes) -> dict:
     remaining = len(data) - (data_offset + 8)
     if declared != remaining:
         raise ValueError("FLdt length mismatch; file may be truncated or malformed")
-    return {
+    result = {
         "signature": "FLhd",
         "header_size": header_size,
         "format_code": struct.unpack_from("<H", data, 8)[0],
@@ -47,10 +48,21 @@ def _fl_header(data: bytes) -> dict:
             format_code=struct.unpack_from("<H", data, 8)[0],
         ),
     }
+    if include_note_graph and result["format_code"] in (0, 16):
+        result["note_graph"] = inspect_pattern_note_graph(
+            data[data_offset + 8 :], ppq=result["ppq"], max_notes=max_notes
+        )
+    return result
 
 
-def inspect_fl_studio_file(path: str) -> dict:
+def inspect_fl_studio_file(
+    path: str, *, include_note_graph: bool = False, max_notes: int = 1024
+) -> dict:
     """Inspect FLP, FST and zipped projects without extraction or mutation."""
+    if type(include_note_graph) is not bool:
+        raise ValueError("include_note_graph must be a boolean")
+    if type(max_notes) is not int or not 0 <= max_notes <= 4096:
+        raise ValueError("max_notes must be an integer from 0 through 4096")
     file = Path(path).expanduser().resolve(strict=True)
     if not file.is_file():
         raise ValueError("Expected a regular file")
@@ -59,7 +71,11 @@ def inspect_fl_studio_file(path: str) -> dict:
     suffix = file.suffix.lower()
     if suffix in {".flp", ".fst"}:
         data = file.read_bytes()
-        return {"path": str(file), "kind": suffix[1:], **_fl_header(data)}
+        return {
+            "path": str(file),
+            "kind": suffix[1:],
+            **_fl_header(data, include_note_graph=include_note_graph, max_notes=max_notes),
+        }
     if suffix != ".zip":
         raise ValueError("Supported extensions: .flp, .fst, .zip")
     with zipfile.ZipFile(file) as archive:
@@ -85,7 +101,14 @@ def inspect_fl_studio_file(path: str) -> dict:
                     data = stream.read(MAX_FILE_BYTES + 1)
                 if len(data) > MAX_FILE_BYTES:
                     raise ValueError("Embedded FLP exceeds inspection limit")
-                projects.append({"member": entry.filename, **_fl_header(data)})
+                graph_selected = include_note_graph and len(projects) < 4
+                project = {
+                    "member": entry.filename,
+                    **_fl_header(data, include_note_graph=graph_selected, max_notes=max_notes),
+                }
+                if include_note_graph and not graph_selected:
+                    project["note_graph_skipped"] = "Graph inspection limited to first 4 members"
+                projects.append(project)
             except (ValueError, zipfile.BadZipFile, EOFError, OSError) as exc:
                 # A corrupt member must not hide other healthy projects.
                 projects.append({"member": entry.filename, "error": f"{type(exc).__name__}: {exc}"})

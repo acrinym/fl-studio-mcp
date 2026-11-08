@@ -355,7 +355,7 @@ retarget it before writing notes to a specific channel.
 
 | Tool | Description |
 |------|-------------|
-| `fl_inspect_native_file` | Inspect FLP, FST, or zipped FL Studio projects without opening or changing them. Reports file type, event summaries, project setting hints, ZIP inventory, and per-member errors. Proprietary plugin state stays opaque. |
+| `fl_inspect_native_file` | Inspect FLP, FST, or ZIP projects without changing them. Includes framing, event summaries, project settings, ZIP inventory, and isolated member errors. With `include_note_graph=True`, also reports pattern IDs, channel-note counts, positions, pitches, and lengths (bounded by `max_notes`). Plugin state stays opaque. |
 
 This inspection works offline and **does not** require FL Studio to be running. It is
 read-only and cannot change plugin presets, FL Studio settings, or project files.
@@ -655,7 +655,8 @@ fl-studio-mcp/
 │       ├── fl_trigger.py         # Piano roll keystroke trigger
 │       ├── midi_connection.py    # MIDI + JSON communication layer
 │       ├── project_formats.py   # Native container validator
-│       └── fl_events.py         # Structural event inspector
+│       ├── fl_events.py         # Structural event inspector
+│       └── pattern_graph.py     # Read-only pattern-note relationships
 ├── install.sh                    # One-command installer (macOS/Linux)
 └── install.ps1                   # One-command installer (Windows)
 ```
