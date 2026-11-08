@@ -188,7 +188,7 @@ def inspect_playlist_graph(
                                 if ref["channel_id"] in channel_map
                                 else None
                             ),
-                            "native_plugin_internal_name": (
+                            "internal_plugin_name": (
                                 channel_map[ref["channel_id"]]["internal_plugin_name"]
                                 if ref["channel_id"] in channel_map
                                 else None
