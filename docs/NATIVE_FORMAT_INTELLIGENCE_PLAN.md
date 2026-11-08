@@ -57,7 +57,7 @@ Operating abstraction: **one musical intention -> inspected candidates -> author
 
 ## Next milestones (not yet implemented)
 
-**B. Project graph:** typed, version-aware channel/pattern/note, playlist clip, mixer and plugin wrapper graph; project settings; FLP/ZIP/FST structural diff; compare with live snapshot and fixtures.
+**B. Project graph (in progress):** optional read-only pattern-to-rack-channel note graph with pitch, timing, velocity and explicit output limits is implemented using documented 24-byte note records. Compare first against authorized FLP/ZIP fixtures. Still needed: playlist clip-to-pattern relationships, channel labels, mixer and plugin-wrapper graph, native structural diff, and live FL Studio parity checks.
 
 **C. State-aware editing:** selective field-scoped changes on copies, preserving unknown chunks, formal round-trip and FL Studio project-open validation. Change plugin patches only when semantics are independently established. Do not edit PPQ until dependent positions are recalculated.
 
