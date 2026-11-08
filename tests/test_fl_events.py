@@ -79,3 +79,21 @@ def test_project_only_settings_not_misattributed_to_presets():
     preset = inspect_event_stream(stream, format_code=48)
     assert preset["project_settings"] is None
     assert preset["coarse_tempo_bpm"] is None
+
+
+def test_fst_version_marker_is_file_level_not_project_setting():
+    version_event = variable(199, b"11.5.5\x00")
+    result = inspect_event_stream(version_event, format_code=48)
+    assert result["fl_version"] == "11.5.5"
+    assert result["event_type_counts"]["file.fl_version"] == 1
+    assert result["project_settings"] is None
+
+
+def test_label_cap_is_true_only_when_extra_unique_label_dropped():
+    events = b"".join(variable(201, f"instrument-{n}".encode()) for n in range(60))
+    result = inspect_event_stream(events)
+    assert len(result["observed_plugin_labels"]) == 60
+    assert result["observed_plugin_labels_truncated"] is False
+    extra = inspect_event_stream(events + variable(203, b"instrument-60"))
+    assert len(extra["observed_plugin_labels"]) == 60
+    assert extra["observed_plugin_labels_truncated"] is True

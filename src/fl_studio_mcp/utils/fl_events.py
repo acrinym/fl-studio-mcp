@@ -25,7 +25,7 @@ EVENT_NAMES = {
     93: "project.tempo_fine_raw",
     156: "project.tempo_raw",
     194: "project.title",
-    199: "project.fl_version",
+    199: "file.fl_version",
     201: "plugin.internal_name",
     203: "plugin.name",
     212: "plugin.wrapper",
@@ -48,7 +48,7 @@ FORMAT_NAMES = {
 def _varint_length(data: bytes, offset: int) -> tuple[int, int]:
     """Read a bounded 7-bit little-endian length without leaving the stream."""
     result = 0
-    for index in range(5):  # 128 MiB input cap needs at most four bytes.
+    for index in range(5):  # Accept up to 5 bytes; payload stays capped by remaining input.
         if offset >= len(data):
             raise ValueError("Truncated FL Studio event length")
         value = data[offset]
@@ -73,6 +73,7 @@ def inspect_event_stream(data: bytes, *, format_code: int = 0) -> dict:
     count = 0
     event_counts: Counter[int] = Counter()
     observed_plugins: list[str] = []
+    observed_plugins_truncated = False
     version = None
     coarse_tempo = None
     project_settings: dict[str, int | bool | str] = {}
@@ -118,11 +119,14 @@ def inspect_event_stream(data: bytes, *, format_code: int = 0) -> dict:
             )
         elif format_code == 0 and event_id == 80:
             project_settings["main_pitch_cents"] = struct.unpack_from("<h", data, start)[0]
-        elif event_id in (201, 203) and len(observed_plugins) < MAX_OBSERVED_NAMES:
+        elif event_id in (201, 203):
             raw = data[start : min(end, start + 160)].split(b"\x00", 1)[0]
             label = raw.decode("utf-8", errors="replace").strip()
             if label and all(ch.isprintable() for ch in label) and label not in observed_plugins:
-                observed_plugins.append(label)
+                if len(observed_plugins) < MAX_OBSERVED_NAMES:
+                    observed_plugins.append(label)
+                else:
+                    observed_plugins_truncated = True
         elif event_id == 213:
             opaque_plugin_bytes += size
         elif event_id == 224:
@@ -147,7 +151,7 @@ def inspect_event_stream(data: bytes, *, format_code: int = 0) -> dict:
         "plugin_data_events": event_counts[213],
         "opaque_plugin_data_bytes": opaque_plugin_bytes,
         "observed_plugin_labels": observed_plugins,
-        "observed_plugin_labels_truncated": len(observed_plugins) == MAX_OBSERVED_NAMES,
+        "observed_plugin_labels_truncated": observed_plugins_truncated,
         "fl_version": version,
         "coarse_tempo_bpm": coarse_tempo if format_code == 0 else None,
         "project_settings": project_settings if format_code == 0 else None,

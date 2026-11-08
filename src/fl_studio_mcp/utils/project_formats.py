@@ -73,12 +73,22 @@ def inspect_fl_studio_file(path: str) -> dict:
             if entry.is_dir() or not entry.filename.lower().endswith(".flp"):
                 continue
             if entry.file_size > MAX_FILE_BYTES:
-                raise ValueError("Embedded FLP exceeds inspection limit")
-            with archive.open(entry) as stream:
-                data = stream.read(MAX_FILE_BYTES + 1)
-            if len(data) > MAX_FILE_BYTES:
-                raise ValueError("Embedded FLP exceeds inspection limit")
-            projects.append({"member": entry.filename, **_fl_header(data)})
+                projects.append(
+                    {
+                        "member": entry.filename,
+                        "error": "Embedded FLP exceeds inspection limit",
+                    }
+                )
+                continue
+            try:
+                with archive.open(entry) as stream:
+                    data = stream.read(MAX_FILE_BYTES + 1)
+                if len(data) > MAX_FILE_BYTES:
+                    raise ValueError("Embedded FLP exceeds inspection limit")
+                projects.append({"member": entry.filename, **_fl_header(data)})
+            except (ValueError, zipfile.BadZipFile, EOFError, OSError) as exc:
+                # A corrupt member must not hide other healthy projects.
+                projects.append({"member": entry.filename, "error": f"{type(exc).__name__}: {exc}"})
         if not projects:
             raise ValueError("ZIP contains no FL Studio .flp project")
         return {

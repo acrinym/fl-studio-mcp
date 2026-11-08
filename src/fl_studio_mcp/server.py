@@ -41,8 +41,9 @@ mcp = FastMCP(
     instructions="""
 FL Studio MCP Server - Control FL Studio from AI assistants.
 
-This server provides tools to control FL Studio through its Python scripting API.
-FL Studio must be running with the FLStudioMCP MIDI controller enabled.
+This server controls FL Studio through its scripting API and inspects native project files.
+Live control requires FL Studio and the FLStudioMCP MIDI controller.
+Offline file inspection does not require the DAW to be running.
 
 Available tool categories:
 - Transport: Play, stop, record, tempo, metronome, position control
@@ -56,6 +57,7 @@ Available tool categories:
 - Undo: Labelled undo points, undo/redo, undo history status
 - Windows: Show, hide and focus FL Studio windows; retarget the piano roll
 - Project snapshot: Whole-project overview in one round-trip
+- Native files: Read-only FLP/FST/ZIP structure and project settings inspection (offline)
 
 Important limitations:
 1. Effects can be loaded into mixer slots, but new instruments cannot be added to the channel rack.

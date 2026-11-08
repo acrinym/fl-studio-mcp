@@ -1,6 +1,6 @@
-# Native FL Studio intelligence: HTE / Lateral / InvisiSynth roadmap
+# Native FL Studio intelligence: architecture roadmap
 
-**Mission:** Give Onyx Desktop Commander-style understanding and verified control of FL Studio, not hundreds of redundant button wrappers. HTE-Newest **documents** in C:\Users\User\Documents\Claude\HTE-Newest guided the reasoning; no HTE Python modules/scripts were executed.
+**Mission:** Provide project-aware inspection and verified operations for FL Studio without generating redundant button-level tools. The architecture favors safe, composable adapters over a single fragile access path.
 
 ## Distinct surfaces
 
@@ -13,7 +13,7 @@
 | Third-party plugin state | VST/VST3-specific chunks, often proprietary | Plugin parameter APIs first; versioned RE only with fixtures | Not decoded |
 | Project settings | Some fields in FLP: tempo, pitch, pan law, etc. | Project-level events; compare to live project status | Initial **read-only** fields |
 | Global FL Studio settings | Audio/MIDI/general/file environment; registry and user data | Explicitly separate, allowlisted audit; preserve licenses | Not accessed or changed |
-| FL Studio UI | Controls absent from scripting API | Authorized Onyx Hands interaction plus read-back | Future adapters |
+| FL Studio UI | Controls absent from scripting API | Authorized GUI automation plus read-back | Future adapters |
 
 **Important:** FLT and FLS are **not** treated as synonymous with FST without evidence. FST is the established FL Studio state/preset format.
 
@@ -25,12 +25,12 @@
 - This is **not** a complete semantic model: repeated IDs can be context-dependent; note counts do not establish channel ownership; initial coarse tempo may be superseded by automation; missing settings are not assumed defaults.
 - No FLP/FST serializer, save operation, registry operation, plugin loading, or FL Studio GUI mutation exists in this milestone.
 
-## Lateral Engine: bypass the blocked interface
+## Alternative mechanisms: bypass unsupported API operations
 
 | User intention | Blocked native route | Lateral execution candidate | Required verification |
 | --- | --- | --- | --- |
 | Find notes across a song | MIDI controller lacks complete project graph | Parse FLP notes/arrangements off-line, resolve pattern and channel IDs | Compare live project read-only |
-| Add an instrument | Controller API cannot add generators | Plugin database plus Onyx Hands GUI adapter | Channel exists and instrument matches |
+| Add an instrument | Controller API cannot add generators | Plugin database plus an authorized GUI adapter | Channel exists and instrument matches |
 | Change a third-party synth patch | Wrapper API misses internal vendor parameters | Load alternate preset via GUI/plugin API; later qualified FST editing | Plugin displays patch; survives save/reopen |
 | Rearrange a clip | Playlist insertion not exposed | GUI or experimental **copy-only** FLP arrangement patch | Reopen copied project, screenshot and semantic diff |
 | Recover damaged preset | Plugin blob/version issues | Compare known-good FST, backups, native vendor export | Check load behavior; preserve original |
@@ -38,7 +38,7 @@
 
 Operating abstraction: **one musical intention -> inspected candidates -> authorized mechanism -> verification receipt**, not a tool per menu item.
 
-## InvisiSynth: verified starting points and research gaps
+## Format research: references and remaining gaps
 
 1. **PyFLP** documents the FLhd/FLdt header, four event size classes and varint payloads, plus models for arrangements, channel rack, mixer inserts, notes and plugins. Sources: https://pyflp.readthedocs.io/en/stable/architecture/flp-format.html and https://pyflp.readthedocs.io/en/stable/reference/project.html . It is a reference/comparator, not a guaranteed serializer. Review **GPL** compatibility before copying its code into this MIT repository.
 2. **Image-Line** documents zipped project contents and limitations of third-party sampler content: https://www.image-line.com/fl-studio-learning-content/fl-studio-online-manual/html/fformats_project.htm .
@@ -46,14 +46,14 @@ Operating abstraction: **one musical intention -> inspected candidates -> author
 4. **Image-Line** confirms FST presets and Settings subfolders: https://www.image-line.com/fl-studio-learning/fl-studio-online-manual/html/app_update.htm .
 5. Still to investigate: VST2/VST3 parameter and chunk handling, FL scripting API differences by version, DAW interchange, production-safe GUI automation, fixtures, audio-to-MIDI separation and transcription. These are **research candidates**, not claimed integrations.
 
-## HTE Mechanical / Edge Case gates
+## Safety and failure-mode gates
 
 - **Failure points:** unknown events, plugin-version-specific chunks, compound project references, FL version upgrades, corrupted/null-filled sync files, GUI focus and dialogs.
 - **Failure isolation:** inspect without FL Studio running. No byte-level rewrite until unknown records are preserved exactly and canonical copies pass re-open tests. Maintain immutable source and hashes.
 - **Versioning:** use sanitized synthetic or user-authorized fixtures saved by different FL versions; demonstrate consistency before write support.
 - **Privacy:** registry license/activation values never appear in reports. Avoid OneDrive sync mirror and null-filled files while recovery is pending.
 - **Transactions:** future modifications create a disposable copy, calculate before/after semantic diff, save a receipt, reopen the copy in FL Studio and roll back on mismatch.
-- **Tests:** synthetic corruption/truncation/ZIP traversal fixtures plus read-only checks against existing FST and Town 04 ZIP. Never mutate those originals.
+- **Tests:** synthetic corruption/truncation/ZIP traversal fixtures plus read-only checks against authorized real-world FST and zipped-project fixtures. Never mutate originals.
 
 ## Next milestones (not yet implemented)
 
@@ -63,8 +63,8 @@ Operating abstraction: **one musical intention -> inspected candidates -> author
 
 **D. System settings inventory:** allowlisted, read-only named settings with provenance, masked license values, and **separate explicit approval before any registry writes**. C:/D: junction migration is a different mission.
 
-**E. Hybrid execution:** choose MIDI, piano-roll script, Onyx Hands GUI, or qualified copy-only native editing. Every mutation ends with verified read-back.
+**E. Hybrid execution:** choose MIDI, piano-roll script, authorized GUI automation, or qualified copy-only native editing. Every mutation ends with verified read-back.
 
 **F. Audio-to-MIDI:** MP3/MP4 audio extraction, polyphonic transcription, optional stems, tempo alignment, confidence reporting and MIDI import; future audio clip/stem editing surfaces beyond MIDI.
 
-**Protection:** No worktrees without Justin's explicit approval. No changes to FL Studio, plugins, registrations, OneDrive, or original Town 04 during this milestone.
+**Protection:** Never modify source projects, plugin licenses, activation settings, cloud-sync files, or the live DAW during this read-only milestone. All write operations require explicit authorization and verification.

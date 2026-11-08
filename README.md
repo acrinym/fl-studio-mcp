@@ -351,6 +351,17 @@ retarget it before writing notes to a specific channel.
 | `fl_connect` | Connect/reconnect to FL Studio |
 | `fl_connection_status` | Get connection status |
 
+### Native project and preset inspection
+
+| Tool | Description |
+|------|-------------|
+| `fl_inspect_native_file` | Inspect FLP, FST, or zipped FL Studio projects without opening or changing them. Reports file type, event summaries, project setting hints, ZIP inventory, and per-member errors. Proprietary plugin state stays opaque. |
+
+This inspection works offline and **does not** require FL Studio to be running. It is
+read-only and cannot change plugin presets, FL Studio settings, or project files.
+For architecture and follow-up goals, see
+[Native format intelligence](docs/NATIVE_FORMAT_INTELLIGENCE_PLAN.md).
+
 ### Transport
 
 | Tool | Description |
@@ -637,11 +648,14 @@ fl-studio-mcp/
 │   │   ├── mixer.py
 │   │   ├── piano_roll.py
 │   │   ├── plugins.py
-│   │   └── transport.py
+│   │   ├── transport.py
+│   │   └── project_files.py       # Native FLP/FST/ZIP inspector
 │   └── utils/
 │       ├── connection.py         # FL Studio connection wrapper
 │       ├── fl_trigger.py         # Piano roll keystroke trigger
-│       └── midi_connection.py    # MIDI + JSON communication layer
+│       ├── midi_connection.py    # MIDI + JSON communication layer
+│       ├── project_formats.py   # Native container validator
+│       └── fl_events.py         # Structural event inspector
 ├── install.sh                    # One-command installer (macOS/Linux)
 └── install.ps1                   # One-command installer (Windows)
 ```
