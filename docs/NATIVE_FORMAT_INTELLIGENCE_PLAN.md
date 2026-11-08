@@ -57,7 +57,7 @@ Operating abstraction: **one musical intention -> inspected candidates -> author
 
 ## Next milestones (not yet implemented)
 
-**B. Project graph (in progress):** optional read-only pattern-to-rack-channel note graph with pitch, timing, velocity and explicit output limits is implemented using documented 24-byte note records. Compare first against authorized FLP/ZIP fixtures. Still needed: playlist clip-to-pattern relationships, channel labels, mixer and plugin-wrapper graph, native structural diff, and live FL Studio parity checks.
+**B. Project graph (in progress):** optional read-only pattern-to-rack-channel note graph is implemented with bounded output. The new optional playlist graph maps documented 32/60-byte arrangement clip records to pattern IDs, 1-based playlist tracks when a 199/500-track schema is present, and each pattern's decoded rack-channel note counts. Unknown layouts are reported, not guessed. Still needed: actual channel/instrument labels, mixer and plugin-wrapper graph, structural diff, and live FL Studio parity tests.
 
 **C. State-aware editing:** selective field-scoped changes on copies, preserving unknown chunks, formal round-trip and FL Studio project-open validation. Change plugin patches only when semantics are independently established. Do not edit PPQ until dependent positions are recalculated.
 

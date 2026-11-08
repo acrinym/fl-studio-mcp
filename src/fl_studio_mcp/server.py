@@ -57,7 +57,7 @@ Available tool categories:
 - Undo: Labelled undo points, undo/redo, undo history status
 - Windows: Show, hide and focus FL Studio windows; retarget the piano roll
 - Project snapshot: Whole-project overview in one round-trip
-- Native files: Read-only FLP/FST/ZIP structure and project settings inspection (offline)
+- Native files: Read-only FLP/FST/ZIP structure, pattern notes, and playlist clips (offline)
 
 Important limitations:
 1. Effects can be loaded into mixer slots, but new instruments cannot be added to the channel rack.

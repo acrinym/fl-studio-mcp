@@ -12,13 +12,21 @@ from pathlib import Path
 
 from fl_studio_mcp.utils.fl_events import FORMAT_NAMES, inspect_event_stream
 from fl_studio_mcp.utils.pattern_graph import MAX_NOTE_RESULT, inspect_pattern_note_graph
+from fl_studio_mcp.utils.playlist_graph import MAX_CLIP_RESULT, inspect_playlist_graph
 
 MAX_FILE_BYTES = 128 * 1024 * 1024
 MAX_ZIP_MEMBERS = 2048
 MAX_ZIP_TOTAL_BYTES = 512 * 1024 * 1024
 
 
-def _fl_header(data: bytes, *, include_note_graph: bool = False, max_notes: int = 1024) -> dict:
+def _fl_header(
+    data: bytes,
+    *,
+    include_note_graph: bool = False,
+    max_notes: int = 1024,
+    include_playlist_graph: bool = False,
+    max_clips: int = 512,
+) -> dict:
     """Validate FLhd/FLdt framing and optionally decode pattern-note relationships."""
     if len(data) < 22 or data[:4] != b"FLhd":
         raise ValueError("Not an FL Studio FLhd container")
@@ -55,17 +63,36 @@ def _fl_header(data: bytes, *, include_note_graph: bool = False, max_notes: int 
             )
         else:
             result["note_graph_skipped"] = "Not a project or score container"
+    if include_playlist_graph:
+        if result["format_code"] == 0:
+            result["playlist_graph"] = inspect_playlist_graph(
+                data[data_offset + 8 :],
+                ppq=result["ppq"],
+                max_clips=max_clips,
+                fl_version=result["event_summary"]["fl_version"],
+            )
+        else:
+            result["playlist_graph_skipped"] = "Not a project container"
     return result
 
 
 def inspect_fl_studio_file(
-    path: str, *, include_note_graph: bool = False, max_notes: int = 1024
+    path: str,
+    *,
+    include_note_graph: bool = False,
+    max_notes: int = 1024,
+    include_playlist_graph: bool = False,
+    max_clips: int = 512,
 ) -> dict:
     """Inspect FLP, FST and zipped projects without extraction or mutation."""
     if type(include_note_graph) is not bool:
         raise ValueError("include_note_graph must be a boolean")
     if type(max_notes) is not int or not 0 <= max_notes <= MAX_NOTE_RESULT:
         raise ValueError(f"max_notes must be an integer from 0 through {MAX_NOTE_RESULT}")
+    if type(include_playlist_graph) is not bool:
+        raise ValueError("include_playlist_graph must be a boolean")
+    if type(max_clips) is not int or not 0 <= max_clips <= MAX_CLIP_RESULT:
+        raise ValueError(f"max_clips must be an integer from 0 through {MAX_CLIP_RESULT}")
     file = Path(path).expanduser().resolve(strict=True)
     if not file.is_file():
         raise ValueError("Expected a regular file")
@@ -77,7 +104,13 @@ def inspect_fl_studio_file(
         return {
             "path": str(file),
             "kind": suffix[1:],
-            **_fl_header(data, include_note_graph=include_note_graph, max_notes=max_notes),
+            **_fl_header(
+                data,
+                include_note_graph=include_note_graph,
+                max_notes=max_notes,
+                include_playlist_graph=include_playlist_graph,
+                max_clips=max_clips,
+            ),
         }
     if suffix != ".zip":
         raise ValueError("Supported extensions: .flp, .fst, .zip")
@@ -104,13 +137,25 @@ def inspect_fl_studio_file(
                     data = stream.read(MAX_FILE_BYTES + 1)
                 if len(data) > MAX_FILE_BYTES:
                     raise ValueError("Embedded FLP exceeds inspection limit")
-                graph_selected = include_note_graph and len(projects) < 4
+                graph_selected = (include_note_graph or include_playlist_graph) and len(
+                    projects
+                ) < 4
                 project = {
                     "member": entry.filename,
-                    **_fl_header(data, include_note_graph=graph_selected, max_notes=max_notes),
+                    **_fl_header(
+                        data,
+                        include_note_graph=graph_selected and include_note_graph,
+                        max_notes=max_notes,
+                        include_playlist_graph=graph_selected and include_playlist_graph,
+                        max_clips=max_clips,
+                    ),
                 }
                 if include_note_graph and not graph_selected:
                     project["note_graph_skipped"] = "Graph inspection limited to first 4 members"
+                if include_playlist_graph and not graph_selected:
+                    project["playlist_graph_skipped"] = (
+                        "Graph inspection limited to first 4 members"
+                    )
                 projects.append(project)
             except (ValueError, zipfile.BadZipFile, EOFError, OSError) as exc:
                 # A corrupt member must not hide other healthy projects.
