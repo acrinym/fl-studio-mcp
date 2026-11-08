@@ -228,7 +228,12 @@ def inspect_playlist_graph(
             {"record_bytes": stride, "blocks": count} for stride, count in sorted(formats.items())
         ],
         "pattern_note_links_incomplete": not notes_complete,
-        "channel_links_incomplete": channel_graph["channels_truncated"],
+        "channel_links_incomplete": channel_graph["channels_truncated"]
+        or any(
+            item["channel_id"] not in channel_map
+            for pattern in patterns.values()
+            for item in pattern["channel_note_counts"]
+        ),
         "read_only": True,
         "limitations": (
             "Track numbers require a known 199/500-track schema; pattern channels "

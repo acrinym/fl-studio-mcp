@@ -251,3 +251,23 @@ def test_ambiguous_record_stride_remains_unrecognized_without_version():
     result = inspect_playlist_graph(stream, ppq=96)
     assert result["total_clips"] == 0
     assert result["unrecognized_playlist_blocks"] == 1
+
+
+def test_missing_channel_identity_is_explicitly_flagged():
+    """A pattern note referring to an absent rack channel is not treated as resolved."""
+    stream = b"".join(
+        (
+            data_event(199, b"24.2\x00"),
+            bytes([65]) + struct.pack("<H", 3),
+            data_event(224, note(7, 68)),
+            bytes([99]) + struct.pack("<H", 0),
+            data_event(233, clip(20483)),
+        )
+    )
+    result = inspect_playlist_graph(stream, ppq=96, fl_version="24.2")
+    assert result["channel_links_incomplete"] is True
+    detail = result["arrangements"][0]["clips"][0]["pattern_channel_details"][0]
+    assert detail["channel_id"] == 7
+    assert detail["channel_found"] is False
+    assert detail["display_name"] is None
+    assert detail["mixer_insert_index"] is None
