@@ -97,3 +97,17 @@ def test_label_cap_is_true_only_when_extra_unique_label_dropped():
     extra = inspect_event_stream(events + variable(203, b"instrument-60"))
     assert len(extra["observed_plugin_labels"]) == 60
     assert extra["observed_plugin_labels_truncated"] is True
+
+
+def test_utf16_labels_are_not_silently_truncated_to_one_character():
+    """Real FLP 11.5+ channel names use UTF-16LE NUL-delimited text."""
+    events = b"".join(
+        [
+            variable(199, b"24.2\x00"),
+            variable(201, "Soundfont Player\x00".encode("utf-16-le")),
+            variable(203, "142-Pizzstr\x00".encode("utf-16-le")),
+            variable(203, "Kick\x00".encode("utf-16-le")),
+        ]
+    )
+    summary = inspect_event_stream(events)
+    assert summary["observed_plugin_labels"] == ["Soundfont Player", "142-Pizzstr", "Kick"]

@@ -73,6 +73,19 @@ def modern_events() -> bytes:
             data_event(199, b"24.2\x00"),
             bytes([65]) + struct.pack("<H", 4),
             data_event(224, note(3, 65) + note(5, 67)),
+            bytes([64]) + struct.pack("<H", 3),
+            bytes([21, 2]),
+            data_event(201, "Soundfont Player\x00".encode("utf-16-le")),
+            data_event(203, "Pizzicato\x00".encode("utf-16-le")),
+            bytes([22, 8]),
+            bytes([64]) + struct.pack("<H", 5),
+            bytes([21, 4]),
+            data_event(201, "Fruity Wrapper\x00".encode("utf-16-le")),
+            data_event(203, "Lead\x00".encode("utf-16-le")),
+            bytes([22, 0]),
+            bytes([64]) + struct.pack("<H", 2),
+            bytes([21, 0]),
+            data_event(203, "Audio clip\x00".encode("utf-16-le")),
             bytes([99]) + struct.pack("<H", 0),
             data_event(233, clip(20484) + clip(2, position=384, track_reversed=498)),
             data_event(238, b"x") * 500,
@@ -98,8 +111,30 @@ def test_modern_pattern_clip_and_channel_clip_link_to_notes():
         {"channel_id": 3, "note_count": 1},
         {"channel_id": 5, "note_count": 1},
     ]
+    assert pattern["pattern_channel_details"] == [
+        {
+            "channel_id": 3,
+            "note_count": 1,
+            "channel_found": True,
+            "display_name": "Pizzicato",
+            "internal_plugin_name": "Soundfont Player",
+            "plugin_identity": "native_plugin_internal_name",
+            "mixer_insert_index": 8,
+        },
+        {
+            "channel_id": 5,
+            "note_count": 1,
+            "channel_found": True,
+            "display_name": "Lead",
+            "internal_plugin_name": "Fruity Wrapper",
+            "plugin_identity": "third_party_wrapper_unresolved",
+            "mixer_insert_index": 0,
+        },
+    ]
     assert channel["kind"] == "channel"
     assert channel["channel_id"] == 2
+    assert channel["channel_found"] is True
+    assert channel["channel_display_name"] == "Audio clip"
     assert channel["playlist_track_number"] == 2
     assert "pattern_id" not in channel
 
@@ -216,3 +251,23 @@ def test_ambiguous_record_stride_remains_unrecognized_without_version():
     result = inspect_playlist_graph(stream, ppq=96)
     assert result["total_clips"] == 0
     assert result["unrecognized_playlist_blocks"] == 1
+
+
+def test_missing_channel_identity_is_explicitly_flagged():
+    """A pattern note referring to an absent rack channel is not treated as resolved."""
+    stream = b"".join(
+        (
+            data_event(199, b"24.2\x00"),
+            bytes([65]) + struct.pack("<H", 3),
+            data_event(224, note(7, 68)),
+            bytes([99]) + struct.pack("<H", 0),
+            data_event(233, clip(20483)),
+        )
+    )
+    result = inspect_playlist_graph(stream, ppq=96, fl_version="24.2")
+    assert result["channel_links_incomplete"] is True
+    detail = result["arrangements"][0]["clips"][0]["pattern_channel_details"][0]
+    assert detail["channel_id"] == 7
+    assert detail["channel_found"] is False
+    assert detail["display_name"] is None
+    assert detail["mixer_insert_index"] is None

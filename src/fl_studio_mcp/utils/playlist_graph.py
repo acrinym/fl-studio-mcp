@@ -12,6 +12,7 @@ import re
 import struct
 from collections import Counter
 
+from fl_studio_mcp.utils.channel_graph import inspect_channel_graph
 from fl_studio_mcp.utils.fl_events import MAX_EVENTS, _varint_length
 from fl_studio_mcp.utils.pattern_graph import inspect_pattern_note_graph
 
@@ -113,6 +114,8 @@ def inspect_playlist_graph(
 
     note_graph = inspect_pattern_note_graph(data, ppq=ppq, max_notes=0)
     patterns = {p["pattern_id"]: p for p in note_graph["patterns"]}
+    channel_graph = inspect_channel_graph(data, fl_version=fl_version)
+    channel_map = {ch["channel_id"]: ch for ch in channel_graph["channels"]}
     notes_complete = (
         note_graph["patterns_over_limit"] == 0
         and note_graph["note_blocks_unrecognized_layout"] == 0
@@ -176,9 +179,39 @@ def inspect_playlist_graph(
                         pattern["channel_note_counts"] if pattern else []
                     )
                     clip["note_links_complete"] = notes_complete
+                    clip["pattern_channel_details"] = [
+                        {
+                            **ref,
+                            "channel_found": ref["channel_id"] in channel_map,
+                            "display_name": (
+                                channel_map[ref["channel_id"]]["display_name"]
+                                if ref["channel_id"] in channel_map
+                                else None
+                            ),
+                            "internal_plugin_name": (
+                                channel_map[ref["channel_id"]]["internal_plugin_name"]
+                                if ref["channel_id"] in channel_map
+                                else None
+                            ),
+                            "plugin_identity": (
+                                channel_map[ref["channel_id"]]["plugin_identity"]
+                                if ref["channel_id"] in channel_map
+                                else "unresolved"
+                            ),
+                            "mixer_insert_index": (
+                                channel_map[ref["channel_id"]]["mixer_insert_index"]
+                                if ref["channel_id"] in channel_map
+                                else None
+                            ),
+                        }
+                        for ref in clip["pattern_channel_note_counts"]
+                    ]
                 else:
                     # This is an audio/automation channel reference, not a pattern.
                     clip["channel_id"] = item_index
+                    channel = channel_map.get(item_index)
+                    clip["channel_found"] = channel is not None
+                    clip["channel_display_name"] = channel["display_name"] if channel else None
                 result["clips"].append(clip)
                 returned += 1
         output.append(result)
@@ -195,10 +228,17 @@ def inspect_playlist_graph(
             {"record_bytes": stride, "blocks": count} for stride, count in sorted(formats.items())
         ],
         "pattern_note_links_incomplete": not notes_complete,
+        "channel_links_incomplete": channel_graph["channels_truncated"]
+        or any(
+            item["channel_id"] not in channel_map
+            for pattern in patterns.values()
+            for item in pattern["channel_note_counts"]
+        ),
         "read_only": True,
         "limitations": (
             "Track numbers require a known 199/500-track schema; pattern channels "
-            "are encoded rack IDs, not verified instrument/plugin names. "
+            "are encoded rack IDs; displayed names may be renamed. "
+            "Fruity Wrapper does not identify a VST product. "
             "Unknown clip layouts are not decoded."
         ),
     }
