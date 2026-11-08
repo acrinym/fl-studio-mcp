@@ -208,3 +208,25 @@ def test_fx_context_ends_at_routing_boundary():
     assert result["mixer_records"][0]["declared_fx_slot_count"] == 1
     assert result["mixer_records"][0]["occupied_fx_slots"] == []
     assert "NOT_AN_EFFECT" not in str(result)
+
+
+def test_named_and_occupied_records_beyond_default_output_are_discoverable():
+    """Consumers can identify which raw mixer records need a larger output cap."""
+    stream = (
+        b"".join(flag_event(76) for _ in range(39))
+        + flag_event(76)
+        + string(204, "Far Bus")
+        + bytes([98])
+        + struct.pack("<H", 0)
+        + string(201, "Fruity Wrapper")
+    )
+    output = inspect_mixer_graph(stream, fl_version="24.2")
+    assert output["mixer_record_count"] == 40
+    assert output["mixer_records_returned"] == 32
+    assert output["mixer_records_with_effects"] == [39]
+    assert output["mixer_records_with_names"] == [39]
+    expanded = inspect_mixer_graph(stream, fl_version="24.2", max_mixer_inserts=40)
+    assert (
+        expanded["mixer_records"][39]["occupied_fx_slots"][0]["internal_plugin_name"]
+        == "Fruity Wrapper"
+    )

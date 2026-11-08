@@ -210,6 +210,12 @@ def inspect_mixer_graph(
         "mixer_records_returned": min(len(inserts), max_mixer_inserts),
         "mixer_records_truncated": len(inserts) > max_mixer_inserts or bool(extra_mixer_events),
         "occupied_effect_slots_in_all_records": total_occupied,
+        "mixer_records_with_effects": [
+            item["mixer_record_index"] for item in inserts if item["occupied_fx_slots"]
+        ],
+        "mixer_records_with_names": [
+            item["mixer_record_index"] for item in inserts if item["display_name"]
+        ],
         "unknown_mixer_flag_blocks": unknown_flags,
         "unrecognized_mixer_parameter_records": unrecognized_params,
         "read_only": True,
