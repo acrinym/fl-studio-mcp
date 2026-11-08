@@ -19,6 +19,8 @@ def register_project_file_tools(mcp: FastMCP) -> None:
         include_playlist_graph: bool = False,
         max_clips: int = 512,
         include_channel_graph: bool = False,
+        include_mixer_graph: bool = False,
+        max_mixer_inserts: int = 32,
     ) -> dict:
         """Inspect an FLP, FST or zipped FL Studio project, without editing it.
 
@@ -28,7 +30,9 @@ def register_project_file_tools(mcp: FastMCP) -> None:
         to pattern IDs and the rack channel IDs used by their decoded notes,
         capped by max_clips. Set include_channel_graph to inspect named
         channels, native plugin identity hints, and their mixer insert routing.
-        Proprietary plugin state remains opaque.
+        Set include_mixer_graph for read-only mixer insert records, FX slot
+        identities, routing masks and raw EQ/mixer parameter values.
+        Results are bounded by max_mixer_inserts. Proprietary plugin state remains opaque.
         This tool never loads a plugin, changes a preset or modifies a project.
         """
         try:
@@ -39,6 +43,8 @@ def register_project_file_tools(mcp: FastMCP) -> None:
                 include_playlist_graph=include_playlist_graph,
                 max_clips=max_clips,
                 include_channel_graph=include_channel_graph,
+                include_mixer_graph=include_mixer_graph,
+                max_mixer_inserts=max_mixer_inserts,
             )
         except Exception as exc:
             return {"error": f"{type(exc).__name__}: {exc}", "read_only": True}
