@@ -120,8 +120,19 @@ def inspect_event_stream(data: bytes, *, format_code: int = 0) -> dict:
         elif format_code == 0 and event_id == 80:
             project_settings["main_pitch_cents"] = struct.unpack_from("<h", data, start)[0]
         elif event_id in (201, 203):
-            raw = data[start : min(end, start + 160)].split(b"\x00", 1)[0]
-            label = raw.decode("utf-8", errors="replace").strip()
+            raw = data[start : min(end, start + 160)]
+            # FL 11.5+ uses UTF-16LE text. Avoid splitting on NUL before
+            # decoding: that would turn "Kick" into the single letter "K".
+            utf16 = len(raw) % 2 == 0 and raw.endswith(b"\x00\x00") and bool(raw)
+            label = (
+                (
+                    raw.decode("utf-16-le", errors="replace")
+                    if utf16
+                    else raw.decode("utf-8", errors="replace")
+                )
+                .split("\x00", 1)[0]
+                .strip()
+            )
             if label and all(ch.isprintable() for ch in label) and label not in observed_plugins:
                 if len(observed_plugins) < MAX_OBSERVED_NAMES:
                     observed_plugins.append(label)

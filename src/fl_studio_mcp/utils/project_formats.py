@@ -10,6 +10,7 @@ import struct
 import zipfile
 from pathlib import Path
 
+from fl_studio_mcp.utils.channel_graph import inspect_channel_graph
 from fl_studio_mcp.utils.fl_events import FORMAT_NAMES, inspect_event_stream
 from fl_studio_mcp.utils.pattern_graph import MAX_NOTE_RESULT, inspect_pattern_note_graph
 from fl_studio_mcp.utils.playlist_graph import MAX_CLIP_RESULT, inspect_playlist_graph
@@ -26,8 +27,9 @@ def _fl_header(
     max_notes: int = 1024,
     include_playlist_graph: bool = False,
     max_clips: int = 512,
+    include_channel_graph: bool = False,
 ) -> dict:
-    """Validate FLhd/FLdt framing and optionally decode pattern-note relationships."""
+    """Validate FLhd/FLdt framing and optionally decode relationships."""
     if len(data) < 22 or data[:4] != b"FLhd":
         raise ValueError("Not an FL Studio FLhd container")
     header_size = struct.unpack_from("<I", data, 4)[0]
@@ -56,6 +58,13 @@ def _fl_header(
             format_code=struct.unpack_from("<H", data, 8)[0],
         ),
     }
+    if include_channel_graph:
+        if result["format_code"] in (0, 32):
+            result["channel_graph"] = inspect_channel_graph(
+                data[data_offset + 8 :], fl_version=result["event_summary"]["fl_version"]
+            )
+        else:
+            result["channel_graph_skipped"] = "Not a project or channel-state container"
     if include_note_graph:
         if result["format_code"] in (0, 16):
             result["note_graph"] = inspect_pattern_note_graph(
@@ -83,6 +92,7 @@ def inspect_fl_studio_file(
     max_notes: int = 1024,
     include_playlist_graph: bool = False,
     max_clips: int = 512,
+    include_channel_graph: bool = False,
 ) -> dict:
     """Inspect FLP, FST and zipped projects without extraction or mutation."""
     if type(include_note_graph) is not bool:
@@ -91,6 +101,8 @@ def inspect_fl_studio_file(
         raise ValueError(f"max_notes must be an integer from 0 through {MAX_NOTE_RESULT}")
     if type(include_playlist_graph) is not bool:
         raise ValueError("include_playlist_graph must be a boolean")
+    if type(include_channel_graph) is not bool:
+        raise ValueError("include_channel_graph must be a boolean")
     if type(max_clips) is not int or not 0 <= max_clips <= MAX_CLIP_RESULT:
         raise ValueError(f"max_clips must be an integer from 0 through {MAX_CLIP_RESULT}")
     file = Path(path).expanduser().resolve(strict=True)
@@ -110,6 +122,7 @@ def inspect_fl_studio_file(
                 max_notes=max_notes,
                 include_playlist_graph=include_playlist_graph,
                 max_clips=max_clips,
+                include_channel_graph=include_channel_graph,
             ),
         }
     if suffix != ".zip":
@@ -137,9 +150,9 @@ def inspect_fl_studio_file(
                     data = stream.read(MAX_FILE_BYTES + 1)
                 if len(data) > MAX_FILE_BYTES:
                     raise ValueError("Embedded FLP exceeds inspection limit")
-                graph_selected = (include_note_graph or include_playlist_graph) and len(
-                    projects
-                ) < 4
+                graph_selected = (
+                    include_note_graph or include_playlist_graph or include_channel_graph
+                ) and len(projects) < 4
                 project = {
                     "member": entry.filename,
                     **_fl_header(
@@ -148,6 +161,7 @@ def inspect_fl_studio_file(
                         max_notes=max_notes,
                         include_playlist_graph=graph_selected and include_playlist_graph,
                         max_clips=max_clips,
+                        include_channel_graph=graph_selected and include_channel_graph,
                     ),
                 }
                 if include_note_graph and not graph_selected:
@@ -156,6 +170,8 @@ def inspect_fl_studio_file(
                     project["playlist_graph_skipped"] = (
                         "Graph inspection limited to first 4 members"
                     )
+                if include_channel_graph and not graph_selected:
+                    project["channel_graph_skipped"] = "Graph inspection limited to first 4 members"
                 projects.append(project)
             except (ValueError, zipfile.BadZipFile, EOFError, OSError) as exc:
                 # A corrupt member must not hide other healthy projects.

@@ -18,6 +18,7 @@ def register_project_file_tools(mcp: FastMCP) -> None:
         max_notes: int = 1024,
         include_playlist_graph: bool = False,
         max_clips: int = 512,
+        include_channel_graph: bool = False,
     ) -> dict:
         """Inspect an FLP, FST or zipped FL Studio project, without editing it.
 
@@ -25,7 +26,9 @@ def register_project_file_tools(mcp: FastMCP) -> None:
         to inspect pattern IDs, channel-note relationships and note positions,
         capped by max_notes. Set include_playlist_graph to map playlist clips
         to pattern IDs and the rack channel IDs used by their decoded notes,
-        capped by max_clips. Proprietary plugin state remains opaque.
+        capped by max_clips. Set include_channel_graph to inspect named
+        channels, native plugin identity hints, and their mixer insert routing.
+        Proprietary plugin state remains opaque.
         This tool never loads a plugin, changes a preset or modifies a project.
         """
         try:
@@ -35,6 +38,7 @@ def register_project_file_tools(mcp: FastMCP) -> None:
                 max_notes=max_notes,
                 include_playlist_graph=include_playlist_graph,
                 max_clips=max_clips,
+                include_channel_graph=include_channel_graph,
             )
         except Exception as exc:
             return {"error": f"{type(exc).__name__}: {exc}", "read_only": True}

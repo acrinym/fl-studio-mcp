@@ -57,7 +57,7 @@ Operating abstraction: **one musical intention -> inspected candidates -> author
 
 ## Next milestones (not yet implemented)
 
-**B. Project graph (in progress):** optional read-only pattern-to-rack-channel note graph is implemented with bounded output. The new optional playlist graph maps documented 32/60-byte arrangement clip records to pattern IDs, 1-based playlist tracks when a 199/500-track schema is present, and each pattern's decoded rack-channel note counts. Unknown layouts are reported, not guessed. Still needed: actual channel/instrument labels, mixer and plugin-wrapper graph, structural diff, and live FL Studio parity tests.
+**B. Project graph (in progress):** optional read-only pattern-to-rack-channel note graph is implemented with bounded output. The new optional playlist graph maps documented 32/60-byte arrangement clip records to pattern IDs, 1-based playlist tracks when a 199/500-track schema is present, and each pattern's decoded rack-channel note counts. Unknown layouts are reported, not guessed. Channel identification now resolves FLP channel IDs to user-facing labels, type, verified native-plugin internal name and direct mixer insert index; playlist clips use those identities when available. Third-party VST identity remains unknown behind Fruity Wrapper. Still needed: mixer insert names/effects, proprietary VST identification through supported APIs, structural diff, and live FL Studio parity tests.
 
 **C. State-aware editing:** selective field-scoped changes on copies, preserving unknown chunks, formal round-trip and FL Studio project-open validation. Change plugin patches only when semantics are independently established. Do not edit PPQ until dependent positions are recalculated.
 
