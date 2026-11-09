@@ -47,6 +47,19 @@ https://github.com/user-attachments/assets/c2b1a5e7-1640-41fa-82bc-18ca7cbae9e8
 
 ## Features
 
+### Universal Musical Project Intelligence (experimental)
+
+This maintained fork now offers two independent DAWproject 1.0 tools:
+`fl_inspect_universal_project` reads a versioned musical graph (tracks, clips,
+notes, tempo/meter, automation, device IDs, mixer destinations and asset hashes),
+while `fl_build_reconstruction_bundle` creates a **new**, non-overwriting folder
+containing per-track MIDI timelines, SHA-256-verified original embedded audio and
+plugin-state files, graph JSON, and an explicit fidelity receipt. This never
+modifies the source or starts FL Studio. **It does not yet create an FLP** or
+restore playlist clips, warps, effects or automation inside FL Studio.
+See [universal reconstruction documentation](docs/UNIVERSAL_PROJECT_RECONSTRUCTION.md)
+for validation and incomplete native-DAW integration limits.
+
 ### Transport Control
 
 - Play, pause, stop playback
