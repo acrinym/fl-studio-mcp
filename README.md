@@ -220,6 +220,38 @@ cp scripts/ComposeWithLLM.pyscript ~/Documents/Image-Line/FL\ Studio/Settings/Pi
 copy scripts\ComposeWithLLM.pyscript "%USERPROFILE%\Documents\Image-Line\FL Studio\Settings\Piano roll scripts\"
 ```
 
+### Custom FL Studio User data folders
+
+FL Studio can store its **User data folder** outside the default Documents location
+(see **Options > File settings**). Upstream
+[PR #3](https://github.com/karl-andres/fl-studio-mcp/pull/3) proposed a shared
+path variable; this fork implements it with the process-environment requirement
+made explicit.
+
+Set `FL_STUDIO_USER_DATA_DIR` to the **Image-Line user data root**, *not* to
+`FL Studio/Settings`. For example, if the FL Studio user data folder is
+`D:\Music\Image-Line`, the controller belongs in:
+
+- `D:\Music\Image-Line\FL Studio\Settings\Hardware\FLStudioMCP`
+- `D:\Music\Image-Line\FL Studio\Settings\Piano roll scripts`
+
+**Both FL Studio and the MCP server must receive the same variable.** An
+environment variable configured only in a ChatGPT/Claude/Cursor MCP-client
+`env` block does **not** propagate into an already running FL Studio process.
+In that situation the MIDI controller may discover its installed folder, but
+the piano-roll script may still look in the wrong place.
+
+On Windows, set the variable in the **user environment** and restart both FL
+Studio and the MCP client. On macOS/Linux, launch both applications with the
+same environment (graphical application launchers don't necessarily inherit
+shell-only variables). If you prefer a server-only absolute settings-folder
+override, `FL_STUDIO_MCP_SETTINGS_DIR` remains supported for backward
+compatibility, but ensure FL Studio uses the corresponding directory; do
+**not** set conflicting values for the two variables.
+
+Nothing here changes FL Studio's own User data folder setting: configure that
+inside FL Studio first, then point the MCP at the same existing folder.
+
 ### 4. Configure FL Studio
 
 1. **Restart FL Studio** (if it's running)

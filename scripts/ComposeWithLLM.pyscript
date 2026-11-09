@@ -17,7 +17,27 @@ import os
 
 
 def get_script_dir():
-    """Get the directory where this script is located"""
+    """Find the data folder used by FL Studio's piano roll script.
+
+    FL_STUDIO_USER_DATA_DIR must be visible to the FL Studio process as well as
+    to the MCP server when using a custom data folder.
+    """
+    user_data_dir = os.environ.get("FL_STUDIO_USER_DATA_DIR")
+    if user_data_dir:
+        return os.path.join(
+            os.path.expanduser(user_data_dir), "FL Studio", "Settings", "Piano roll scripts"
+        )
+
+    # Preserve the regular Documents default and detect an installed OneDrive
+    # piano roll script when Documents has been redirected to OneDrive.
+    userprofile = os.environ.get("USERPROFILE")
+    if userprofile:
+        onedrive = os.path.join(
+            userprofile, "OneDrive", "Documents", "Image-Line", "FL Studio",
+            "Settings", "Piano roll scripts"
+        )
+        if os.path.isfile(os.path.join(onedrive, "ComposeWithLLM.pyscript")):
+            return onedrive
     return os.path.expanduser("~/Documents/Image-Line/FL Studio/Settings/Piano roll scripts")
 
 
