@@ -25,6 +25,7 @@ BUNDLE_VERSION = "fl-studio-reconstruction-bundle/1"
 
 
 def _json(path: Path, obj: dict) -> None:
+    """Persist a deterministic UTF-8 JSON artifact with stable key ordering."""
     path.write_text(
         json.dumps(obj, sort_keys=True, indent=2, ensure_ascii=False) + "\n",
         encoding="utf-8",
@@ -32,6 +33,7 @@ def _json(path: Path, obj: dict) -> None:
 
 
 def _sha(path: Path) -> str:
+    """Hash an output file for comparison with its source provenance."""
     digest = hashlib.sha256()
     with path.open("rb") as f:
         for block in iter(lambda: f.read(1024 * 1024), b""):
@@ -58,6 +60,11 @@ def _events_for_track(graph: dict, track_id: str) -> tuple[list, dict]:
             continue
         if clip["reference"] is not None:
             skipped.append({"reason": "clip_reference_not_resolved", "clip": clip["name"]})
+            continue
+        if clip["nested_clips"]:
+            # Nested clip offsets and play windows are not yet translated;
+            # exporting their descendant notes at the outer start is false fidelity.
+            skipped.append({"reason": "nested_clip_timing_not_resolved", "clip": clip["name"]})
             continue
         for note in clip["notes"]:
             start = clip["start"] + note["time"] - clip["play_start"]
@@ -87,6 +94,7 @@ def _events_for_track(graph: dict, track_id: str) -> tuple[list, dict]:
 
 
 def _write_midi(path: Path, track: dict, events: list, bpm: float, signature: list) -> None:
+    """Write declared-position MIDI note events with source tempo and meter."""
     midi = mido.MidiFile(type=0, ticks_per_beat=TICKS_PER_BEAT)
     midi_track = mido.MidiTrack()
     midi.tracks.append(midi_track)
@@ -182,6 +190,9 @@ def build_dawproject_bundle(source_path: str, output_dir: str) -> dict:
         # dropping them from the conversion or inventing equivalent FL controls.
         devices = sum(len(track["devices"]) for track in graph["tracks"])
         audio_clips = sum(bool(clip["audio"]) for clip in graph["clips"])
+        external_resources = [
+            issue for issue in graph["diagnostics"] if issue["kind"] == "external_resource_not_read"
+        ]
         tempo_changes = len(graph["transport"]["tempo_automation"])
         notes_fidelity = (
             "converted with declared mapping"
@@ -246,6 +257,11 @@ def build_dawproject_bundle(source_path: str, output_dir: str) -> dict:
                     "files": files,
                 },
                 "audio_clips": {"status": "unknown/unverified in FL Studio", "count": audio_clips},
+                "external_resources": {
+                    "status": "unavailable/missing" if external_resources else "not present",
+                    "count": len(external_resources),
+                    "reason": "Host paths are never read or copied",
+                },
                 "devices": {"status": "unknown/unverified in FL Studio", "count": devices},
                 "automation": {
                     "status": "unknown/unverified in FL Studio",

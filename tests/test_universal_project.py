@@ -85,6 +85,7 @@ PROJECT_XML = """<?xml version="1.0" encoding="UTF-8"?>
 def source_zip(
     path, *, xml=PROJECT_XML, sample=b"real-audio-bytes", state=b"opaque-plugin-preset", extras=None
 ):
+    """Create a repeatable DAWproject fixture inside pytest's temporary directory."""
     with zipfile.ZipFile(path, "w") as z:
         z.writestr("project.xml", xml)
         z.writestr("metadata.xml", "<MetaData/>")
@@ -96,6 +97,7 @@ def source_zip(
 
 
 def test_dawproject_graph_and_bundle_true_end_to_end(tmp_path):
+    """Check graph, generated MIDI and asset hashes against known fixture semantics."""
     source = source_zip(tmp_path / "session.dawproject")
     original = source.read_bytes()
     graph = read_dawproject(str(source))
@@ -148,6 +150,7 @@ def test_dawproject_graph_and_bundle_true_end_to_end(tmp_path):
 
 
 def test_existing_output_is_never_overwritten(tmp_path):
+    """Protect preexisting output directory data against destructive writes."""
     source = source_zip(tmp_path / "session.dawproject")
     output = tmp_path / "existing"
     output.mkdir()
@@ -159,12 +162,14 @@ def test_existing_output_is_never_overwritten(tmp_path):
 
 @pytest.mark.parametrize("member", ["../escape.wav", "/absolute.wav", "C:/win.wav"])
 def test_zip_traversal_and_unsafe_paths_rejected(tmp_path, member):
+    """Reject nonportable and archive-traversal member filenames."""
     source = source_zip(tmp_path / "evil.dawproject", extras={member: b"bad"})
     with pytest.raises(ValueError, match="Unsafe"):
         read_dawproject(str(source))
 
 
 def test_case_colliding_resources_rejected(tmp_path):
+    """Reject archive member names that collide on case-insensitive systems."""
     source = source_zip(
         tmp_path / "duplicate.dawproject", extras={"AUDIO/DRUM-LOOP.WAV": b"different"}
     )
@@ -173,6 +178,7 @@ def test_case_colliding_resources_rejected(tmp_path):
 
 
 def test_rejects_dtd_and_unknown_schema_version(tmp_path):
+    """Reject XML entity expansion and unqualified interchange versions."""
     dtd = '<!DOCTYPE Project [<!ENTITY hidden SYSTEM "file:///C:/secret.txt">]>'
     source = source_zip(tmp_path / "evil.dawproject", xml=dtd + PROJECT_XML)
     with pytest.raises(ValueError, match="DTD"):
@@ -185,6 +191,7 @@ def test_rejects_dtd_and_unknown_schema_version(tmp_path):
 
 
 def test_missing_media_is_reported_not_manufactured(tmp_path):
+    """Report nonexistent referenced media instead of synthesizing a replacement."""
     source = source_zip(
         tmp_path / "absent.dawproject",
         xml=PROJECT_XML.replace("audio/drum-loop.wav", "missing/asset.wav"),
@@ -200,6 +207,7 @@ def test_missing_media_is_reported_not_manufactured(tmp_path):
 
 
 def test_loop_and_seconds_timing_not_masqueraded_as_exact(tmp_path):
+    """Preserve explicit lossy accounting for unsupported looping and timing."""
     xml = PROJECT_XML.replace(
         'playStart="0" name="Bass Intro"',
         'playStart="0" loopStart="0" loopEnd="4" name="Bass Intro"',
@@ -215,6 +223,7 @@ def test_loop_and_seconds_timing_not_masqueraded_as_exact(tmp_path):
 
 
 def test_invalid_note_and_duplicate_track_ids_fail_closed(tmp_path):
+    """Reject malformed source note identities and duplicate track IDs."""
     source = source_zip(
         tmp_path / "malformed.dawproject", xml=PROJECT_XML.replace('key="65"', 'key="999"')
     )
@@ -226,14 +235,19 @@ def test_invalid_note_and_duplicate_track_ids_fail_closed(tmp_path):
 
 
 def test_mcp_tools_advertise_incomplete_conversion(tmp_path):
+    """Verify that MCP output never claims an automatically reconstructed native FLP."""
     source = source_zip(tmp_path / "session.dawproject")
 
     class MCP:
         def __init__(self):
+            """Provide a minimal FastMCP-compatible test registration interface."""
             self.tools = {}
 
         def tool(self):
+            """Provide a minimal FastMCP-compatible test registration interface."""
+
             def register(fn):
+                """Provide a minimal FastMCP-compatible test registration interface."""
                 self.tools[fn.__name__] = fn
                 return fn
 
@@ -250,6 +264,7 @@ def test_mcp_tools_advertise_incomplete_conversion(tmp_path):
 
 
 def test_orphan_clip_notes_are_counted_as_unconverted(tmp_path):
+    """Count orphaned clip notes as source content even when export is impossible."""
     xml = PROJECT_XML.replace('track="bass"', 'track="not-a-real-track"')
     source = source_zip(tmp_path / "orphan.dawproject", xml=xml)
     graph = read_dawproject(str(source))
@@ -263,6 +278,7 @@ def test_orphan_clip_notes_are_counted_as_unconverted(tmp_path):
 
 
 def test_oversized_midi_timestamps_are_declared_skips(tmp_path):
+    """Avoid emitting timestamps outside the supported Standard MIDI tick range."""
     xml = PROJECT_XML.replace(
         'time="0" duration="8" playStart="0" name="Bass Intro"',
         'time="500000" duration="8" playStart="0" name="Bass Intro"',
@@ -279,9 +295,10 @@ def test_oversized_midi_timestamps_are_declared_skips(tmp_path):
 
 
 def test_nested_clip_warps_and_track_hierarchy_survive_in_graph(tmp_path):
+    """Verify group hierarchy and nested audio warp metadata are preserved."""
     xml = PROJECT_XML.replace(
-        '<Track contentType="notes" id="bass" name="Bass">',
-        '<Track contentType="notes" id="bass" name="Bass">',
+        '<Track id="master" name="Master">',
+        '<Track id="master" name="Master"><Track id="child" name="Child"/>',
     )
     source = source_zip(tmp_path / "nested.dawproject", xml=xml)
     graph = read_dawproject(str(source))
@@ -291,7 +308,11 @@ def test_nested_clip_warps_and_track_hierarchy_survive_in_graph(tmp_path):
         {"time": "8", "contentTime": "2.823"},
     ]
     assert len(audio["nested_clips"]) == 1
-    assert len(graph["tracks"]) == 3
+    assert len(graph["tracks"]) == 4
+    parent_by_id = {track["id"]: track["parent_track_id"] for track in graph["tracks"]}
+    assert parent_by_id["child"] == "master"
+    assert parent_by_id["master"] is None
+    assert parent_by_id["bass"] is None
     output = tmp_path / "nested-bundle"
     build_dawproject_bundle(str(source), str(output))
     receipt = json.loads((output / "fidelity_receipt.json").read_text(encoding="utf-8"))
@@ -300,6 +321,7 @@ def test_nested_clip_warps_and_track_hierarchy_survive_in_graph(tmp_path):
 
 
 def test_tempo_automation_explicitly_qualifies_note_timing(tmp_path):
+    """Describe unresolved tempo ramps instead of claiming timing fidelity."""
     xml = PROJECT_XML.replace(
         '<Arrangement id="arr">',
         """
@@ -319,3 +341,80 @@ def test_tempo_automation_explicitly_qualifies_note_timing(tmp_path):
     assert receipt["features"]["tempo_automation"]["status"] == "unknown/unverified"
     assert receipt["features"]["notes"]["status"] == "approximated / lossy"
     assert "Tempo automation" in receipt["features"]["notes"]["timing_caveat"]
+
+
+def test_corrupt_archive_returns_structured_error_from_both_tools(tmp_path):
+    """Both MCP entry points contain malformed ZIP errors without a process crash."""
+    source = tmp_path / "not-actually-a-zip.dawproject"
+    source.write_bytes(b"not-a-zip-file")
+
+    class Recorder:
+        def __init__(self):
+            """Provide a minimal FastMCP-compatible test registration interface."""
+            self.tools = {}
+
+        def tool(self):
+            """Provide a minimal FastMCP-compatible test registration interface."""
+
+            def register(fn):
+                """Provide a minimal FastMCP-compatible test registration interface."""
+                self.tools[fn.__name__] = fn
+                return fn
+
+            return register
+
+    mcp = Recorder()
+    register_universal_project_tools(mcp)
+    inspected = mcp.tools["fl_inspect_universal_project"](str(source))
+    built = mcp.tools["fl_build_reconstruction_bundle"](str(source), str(tmp_path / "uncreated"))
+    assert "BadZipFile" in inspected["error"]
+    assert "BadZipFile" in built["error"]
+    assert not (tmp_path / "uncreated").exists()
+    assert source.read_bytes() == b"not-a-zip-file"
+
+
+def test_nested_note_clip_does_not_emit_wrong_midi_ticks(tmp_path):
+    """Inner-clip note timing is retained as source data but not guessed."""
+    xml = PROJECT_XML.replace("<Notes>", '<Clips><Clip time="4" duration="4"><Notes>', 1).replace(
+        "</Notes>", "</Notes></Clip></Clips>", 1
+    )
+    source = source_zip(tmp_path / "nested-notes.dawproject", xml=xml)
+    graph = read_dawproject(str(source))
+    assert len(graph["clips"][0]["nested_clips"]) == 1
+    assert len(graph["clips"][0]["notes"]) == 2
+    out = tmp_path / "nested-package"
+    result = build_dawproject_bundle(str(source), str(out))
+    assert result["source_notes"] == 3
+    assert result["exported_notes"] == 1
+    receipt = json.loads((out / "fidelity_receipt.json").read_text(encoding="utf-8"))
+    assert receipt["features"]["notes"]["status"] == "approximated / lossy"
+    assert any(
+        s["reason"] == "nested_clip_timing_not_resolved"
+        for s in receipt["features"]["notes"]["skipped"]
+    )
+
+
+def test_external_dawproject_resource_is_not_read_from_host(tmp_path):
+    """External absolute media is classified as missing, never opened or copied."""
+    host_path = "C:\\private_samples\\user_kick.wav"
+    xml = PROJECT_XML.replace(
+        'path="audio/drum-loop.wav"',
+        f'path="{host_path}" external="true"',
+    )
+    source = source_zip(tmp_path / "external.dawproject", xml=xml)
+    graph = read_dawproject(str(source))
+    assert len(graph["tracks"]) == 3
+    assert graph["clips"][-1]["audio"][0]["external"] == "true"
+    assert any(
+        d["kind"] == "external_resource_not_read" and d["path"] == host_path
+        for d in graph["diagnostics"]
+    )
+    assert all(resource["path"] != host_path for resource in graph["resources"])
+    assert any(resource["path"] == "plugins/patch.clap-preset" for resource in graph["resources"])
+    output = tmp_path / "safe-bundle"
+    result = build_dawproject_bundle(str(source), str(output))
+    assert result["resources"] == 1
+    assert not (output / "resources" / "audio" / "drum-loop.wav").exists()
+    receipt = json.loads((output / "fidelity_receipt.json").read_text(encoding="utf-8"))
+    assert receipt["features"]["external_resources"]["count"] == 1
+    assert receipt["features"]["external_resources"]["status"] == "unavailable/missing"

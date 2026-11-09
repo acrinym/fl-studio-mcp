@@ -24,20 +24,24 @@ MAX_RESOURCES = 2048
 
 
 def _tag(element: ET.Element) -> str:
+    """Return the local XML tag name, without any namespace prefix."""
     return element.tag.rsplit("}", 1)[-1]
 
 
 def _child(node: ET.Element | None, tag: str) -> ET.Element | None:
+    """Return the first directly nested element with the requested local tag."""
     if node is None:
         return None
     return next((item for item in node if _tag(item) == tag), None)
 
 
 def _descendants(node: ET.Element, tag: str):
+    """Iterate matching descendants, including nested clip content."""
     return (item for item in node.iter() if _tag(item) == tag)
 
 
 def _number(text: str | None, name: str, *, default: float | None = None) -> float:
+    """Parse finite numeric XML attributes with an explicit bounded range."""
     if text is None:
         if default is None:
             raise ValueError(f"Required DAWproject number missing: {name}")
@@ -62,6 +66,7 @@ def _resource_path(path: str) -> str:
 
 
 def _hash_file(path: Path) -> str:
+    """Hash source bytes incrementally without buffering the entire file."""
     h = hashlib.sha256()
     with path.open("rb") as stream:
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
@@ -70,6 +75,7 @@ def _hash_file(path: Path) -> str:
 
 
 def _zip_inventory(archive: zipfile.ZipFile) -> dict[str, zipfile.ZipInfo]:
+    """Validate bounded ZIP members before trusting any embedded resource path."""
     infos = archive.infolist()
     if len(infos) > MAX_MEMBERS:
         raise ValueError("DAWproject ZIP exceeds member limit")
@@ -197,6 +203,7 @@ def read_dawproject(path: str) -> dict:
                             )
 
                 def param(name: str):
+                    """Read one optional mixer parameter from the channel's XML."""
                     item = _child(channel, name)
                     return _number(item.get("value"), name) if item is not None else None
 
@@ -254,6 +261,7 @@ def read_dawproject(path: str) -> dict:
                 )
 
             def walk(node: ET.Element, track: str | None, unit: str, depth: int) -> None:
+                """Walk arrangement lanes and capture source clips with track ownership."""
                 nonlocal total_notes
                 if depth > 32:
                     raise ValueError("DAWproject lane nesting exceeds limit")
@@ -305,6 +313,7 @@ def read_dawproject(path: str) -> dict:
                         audio.append(
                             {
                                 "path": file.get("path") if file is not None else None,
+                                "external": file.get("external") if file is not None else None,
                                 "sample_rate": entry.get("sampleRate"),
                                 "channels": entry.get("channels"),
                                 "algorithm": entry.get("algorithm"),
@@ -361,9 +370,18 @@ def read_dawproject(path: str) -> dict:
                             "clip": clip["name"],
                         }
                     )
-        used_paths = {
-            ref for clip in result["clips"] for item in clip["audio"] if (ref := item.get("path"))
-        }
+        # External resources can legally name absolute host paths; retain the
+        # reference for diagnosis but never attempt to read, hash or copy it.
+        used_paths = set()
+        for clip in result["clips"]:
+            for item in clip["audio"]:
+                path = item.get("path")
+                if item.get("external", "false") in ("true", "True", "1"):
+                    result["diagnostics"].append(
+                        {"kind": "external_resource_not_read", "path": path, "clip": clip["name"]}
+                    )
+                elif path:
+                    used_paths.add(path)
         used_paths.update(
             dev["state_path"]
             for track in result["tracks"]

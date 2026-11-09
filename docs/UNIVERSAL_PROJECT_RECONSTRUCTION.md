@@ -22,6 +22,8 @@ handoff for FL Studio, with explicit per-feature fidelity accounting.
 * Embedded CLAP/VST or other vendor state remains opaque. Plugin substitutes,
   audio stretch/warps, per-note expression, source clip instancing, routing,
   note automation, and tempo ramps are **NOT rebuilt inside FL Studio**.
+  Nested note clips without a verified time mapping are counted but skipped,
+  never exported at unqualified tick positions.
 * MIDI clips are flattened per source track into positioned time events; effects
   and audio source files are retained in their original bytes, not recreated as
   an FL Studio mixer/Playlist project. Missing files and unsupported timing
@@ -53,7 +55,9 @@ not attempt to deserialize vendor plugin state.
 bytes, converted with a declared mapping, approximated/lossy, unavailable,
 unknown/unverified, or explicitly outside the current backend. An exported MIDI
 file is **not** evidence that an FL Studio project exists or that a synthesizer,
-clip, bus or automation lane is correctly restored.
+clip, bus or automation lane is correctly restored. DAWproject external
+resources are retained as references but never read from absolute host paths;
+they receive explicit unavailable-resource diagnostics.
 
 ## Qualification sources
 

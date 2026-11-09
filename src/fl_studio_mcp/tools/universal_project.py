@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import zipfile
+import zlib
 from typing import TYPE_CHECKING
 
 from fl_studio_mcp.utils.reconstruction_bundle import build_dawproject_bundle
@@ -12,7 +13,23 @@ if TYPE_CHECKING:
     from fastmcp import FastMCP
 
 
+_EXPECTED_ARCHIVE_ERRORS = (
+    OSError,
+    ValueError,
+    KeyError,
+    TypeError,
+    EOFError,
+    NotImplementedError,
+    RuntimeError,  # encrypted members raise RuntimeError in zipfile
+    zipfile.BadZipFile,
+    zipfile.LargeZipFile,
+    zlib.error,
+)
+
+
 def register_universal_project_tools(mcp: FastMCP) -> None:
+    """Register the two universal project MCP operations with their failure contracts."""
+
     @mcp.tool()
     def fl_inspect_universal_project(path: str) -> dict:
         """Read a DAWproject 1.0 ZIP into a bounded musical project graph.
@@ -23,7 +40,7 @@ def register_universal_project_tools(mcp: FastMCP) -> None:
         """
         try:
             return read_dawproject(path)
-        except (OSError, ValueError, KeyError, TypeError) as exc:
+        except _EXPECTED_ARCHIVE_ERRORS as exc:
             return {"error": f"{type(exc).__name__}: {exc}", "read_only": True}
 
     @mcp.tool()
@@ -38,5 +55,5 @@ def register_universal_project_tools(mcp: FastMCP) -> None:
         """
         try:
             return build_dawproject_bundle(path, output_dir)
-        except (OSError, ValueError, KeyError, TypeError, zipfile.BadZipFile) as exc:
+        except _EXPECTED_ARCHIVE_ERRORS as exc:
             return {"error": f"{type(exc).__name__}: {exc}", "source_modified": False}
