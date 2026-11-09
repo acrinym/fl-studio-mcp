@@ -16,9 +16,14 @@ from __future__ import annotations
 import json
 import os
 import platform
+import threading
 import time
 from pathlib import Path
 from typing import Any
+
+# The JSON command/response filenames are shared even across MIDIConnection
+# instances. One process-wide lock avoids cross-instance request collisions.
+_COMMAND_TRANSACTION_LOCK = threading.RLock()
 
 
 def get_fl_settings_base() -> Path:
@@ -27,7 +32,13 @@ def get_fl_settings_base() -> Path:
 
     env_dir = os.environ.get("FL_STUDIO_MCP_SETTINGS_DIR")
     if env_dir:
-        return Path(env_dir)
+        return Path(env_dir).expanduser()
+
+    # Upstream PR #3: user-data roots (Image-Line folder) are distinct from
+    # the full Settings path supplied by FL_STUDIO_MCP_SETTINGS_DIR above.
+    user_data_dir = os.environ.get("FL_STUDIO_USER_DATA_DIR")
+    if user_data_dir:
+        return Path(user_data_dir).expanduser() / "FL Studio" / "Settings"
 
     if system == "Windows":
         import winreg
@@ -91,6 +102,8 @@ class MIDIConnection:
     TRIGGER_NOTE = 127
 
     def __init__(self) -> None:
+        # All requests share one command/response JSON pair and a MIDI port.
+        self._command_lock = _COMMAND_TRANSACTION_LOCK
         self._port = None
         self._port_name: str | None = None
         self._connected = False
@@ -122,9 +135,7 @@ class MIDIConnection:
         try:
             import mido
         except ImportError:
-            self._error = (
-                "mido library not installed. Install with: pip install mido python-rtmidi"
-            )
+            self._error = "mido library not installed. Install with: pip install mido python-rtmidi"
             return False
 
         # Find available MIDI output ports
@@ -193,7 +204,11 @@ class MIDIConnection:
             return False
 
     def disconnect(self) -> None:
-        """Close the MIDI connection."""
+        """Close the MIDI port without racing an in-flight transaction."""
+        with self._command_lock:
+            self._disconnect_locked()
+
+    def _disconnect_locked(self) -> None:
         if self._port is not None:
             try:
                 self._port.close()
@@ -207,9 +222,7 @@ class MIDIConnection:
         """Ensure connection to FL Studio is active. Raises RuntimeError if not."""
         if not self.is_connected:
             if not self.connect():
-                raise RuntimeError(
-                    self._error or "Failed to connect to FL Studio via MIDI"
-                )
+                raise RuntimeError(self._error or "Failed to connect to FL Studio via MIDI")
 
     def send_command(
         self,
@@ -230,6 +243,13 @@ class MIDIConnection:
         Raises:
             RuntimeError: If not connected or command fails
         """
+        with self._command_lock:
+            return self._send_command_locked(action, params, timeout)
+
+    def _send_command_locked(
+        self, action: str, params: dict[str, Any] | None, timeout: float
+    ) -> dict[str, Any]:
+        """Perform the full request/response transaction under one lock."""
         self.ensure_connected()
 
         # Prepare command
@@ -254,6 +274,7 @@ class MIDIConnection:
         # Send MIDI trigger
         try:
             import mido
+
             trigger_msg = mido.Message("note_on", note=self.TRIGGER_NOTE, velocity=127)
             self._port.send(trigger_msg)
         except Exception as e:
@@ -319,6 +340,7 @@ class MIDIConnection:
         """Get connection status information."""
         try:
             import mido
+
             output_ports = mido.get_output_names()
         except Exception:
             output_ports = []
@@ -340,14 +362,16 @@ _connection: MIDIConnection | None = None
 def get_connection() -> MIDIConnection:
     """Get the global MIDI connection instance."""
     global _connection
-    if _connection is None:
-        _connection = MIDIConnection()
-    return _connection
+    with _COMMAND_TRANSACTION_LOCK:
+        if _connection is None:
+            _connection = MIDIConnection()
+        return _connection
 
 
 def reset_connection() -> None:
     """Reset the connection state to allow reconnection attempts."""
     global _connection
-    if _connection is not None:
-        _connection.disconnect()
-        _connection = None
+    with _COMMAND_TRANSACTION_LOCK:
+        if _connection is not None:
+            _connection.disconnect()
+            _connection = None
