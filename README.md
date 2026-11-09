@@ -362,6 +362,28 @@ read-only and cannot change plugin presets, FL Studio settings, or project files
 For architecture and follow-up goals, see
 [Native format intelligence](docs/NATIVE_FORMAT_INTELLIGENCE_PLAN.md).
 
+### Music toolkit (offline)
+
+The original upstream [music toolkit proposal, PR #9](https://github.com/karl-andres/fl-studio-mcp/pull/9)
+adds a complete music-theory and note-generation surface. These tools work without
+an FL Studio connection; their output is in the same note format as
+`fl_send_notes`, so you can preview or transform it before writing it to a piano roll.
+
+| Tool | Purpose |
+|------|---------|
+| `music_reference` | Supported scale/chord names, rhythm syntax and transformations |
+| `music_scale` | Pitches and note names for a scale |
+| `music_chords` | Chord symbols and roman-numeral progressions as timed notes |
+| `music_degrees` | Melody construction from scale degrees and rests |
+| `music_rhythm` | Step grids, accents, ties and Euclidean rhythms |
+| `music_roll` | Accelerating/decelerating drum and melodic rolls |
+| `music_transform` | Quantization, arpeggiation, transposition, humanization and other chained transforms |
+
+Music toolkit note names use scientific pitch (`C4 = MIDI 60`); FL Studio's piano
+roll displays that MIDI pitch as C5. The toolkit does not load instruments,
+modify native project files or write to FL Studio unless its notes are explicitly
+passed to a separate live editing tool.
+
 ### Transport
 
 | Tool | Description |

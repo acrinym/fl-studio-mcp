@@ -25,6 +25,7 @@ from fl_studio_mcp.tools import (
     register_compose_tools,
     register_history_tools,
     register_mixer_tools,
+    register_music_tools,
     register_pattern_tools,
     register_piano_roll_tools,
     register_playlist_tools,
@@ -52,6 +53,7 @@ Available tool categories:
 - Plugins: Parameter control, preset navigation, plugin database search, mixer FX loading
 - Piano roll: Add/delete/read notes, chords, piano roll context
 - Composition: Diatonic chord progressions, humanize (velocity/timing/swing)
+- Music toolkit (offline): Scales, chord symbols/roman numerals, rhythms, rolls and note transforms
 - Patterns: List, select, create, clone, rename
 - Playlist & arrangement: Track name/color/mute/solo, time markers
 - Undo: Labelled undo points, undo/redo, undo history status
@@ -161,6 +163,7 @@ register_pattern_tools(mcp)
 register_ui_tools(mcp)
 register_playlist_tools(mcp)
 register_compose_tools(mcp)
+register_music_tools(mcp)
 register_project_file_tools(mcp)
 
 
