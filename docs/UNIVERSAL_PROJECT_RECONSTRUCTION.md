@@ -28,9 +28,16 @@ handoff for FL Studio, with explicit per-feature fidelity accounting.
   and audio source files are retained in their original bytes, not recreated as
   an FL Studio mixer/Playlist project. Missing files and unsupported timing
   cause explicit diagnostics/skips; they are not faked as a successful import.
+* An independent optional **native FLP template backend** now exists:
+  `fl_build_native_flp_from_template` writes note patterns, Playlist placements
+  and static tempo into a **new copy** of a deliberately blank FL-authored FLP.
+  It uses MIT-licensed flpkit 0.9.0 (Python 3.11+), has per-clip and per-note
+  parser readback, and an explicit native fidelity receipt. It is a limited
+  reconstruction rather than full cross-DAW equivalence. See
+  [native template backend](NATIVE_FL_TEMPLATE_BACKEND.md).
 * No live FL Studio project, licensing, user VST directories or originals are
-  modified. Automatic native FLP reconstruction and FL-open-and-reopen validation
-  **are open tasks** requiring verified FL Studio writing/automation authority.
+  modified. Native FL Studio application open/save/reopen validation and complete
+  reconstruction **remain open** until separately authorized and qualified.
 
 ## Source-to-bundle contract
 

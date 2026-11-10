@@ -376,7 +376,7 @@ def read_dawproject(path: str) -> dict:
         for clip in result["clips"]:
             for item in clip["audio"]:
                 path = item.get("path")
-                if item.get("external", "false") in ("true", "True", "1"):
+                if (item.get("external") or "false").strip(" \t\r\n") in ("true", "1"):
                     result["diagnostics"].append(
                         {"kind": "external_resource_not_read", "path": path, "clip": clip["name"]}
                     )

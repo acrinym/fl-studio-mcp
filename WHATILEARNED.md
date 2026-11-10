@@ -122,3 +122,21 @@
 - **Verification:** Full WSL and Windows suites each passed 267 tests on corrected source, Ruff lint and format clean; independent exact-head rereview still required.
 - **Remaining:** No claim of FL Studio-native interpretation until actual application reopen qualification.
 - **Prevention:** Assert behavior exercised by each test name; prefer meaningful docstrings, not suppression of review checks.
+
+## 2026-11-09 — PR #8 re-review: XSD boolean whitespace broke external-resource isolation
+
+- **Symptom:** XML Schema allows surrounding XML whitespace in an external=true boolean. The parser compared exact strings and treated external=" true " as an internal ZIP path, eventually rejecting the entire source.
+- **Root cause:** An XML boolean attribute was compared without applying the schema's whitespace-collapse semantics.
+- **Solution:** Strip XML spaces, tabs, carriage returns and line feeds before recognizing canonical XSD true/1. External references remain graph-only; no host-path I/O.
+- **Tests:** Parameterized external resource regression for true, surrounding spaces, tabs/1, and line breaks/true. WSL targeted test group 21/21 before native backend expansion.
+- **Remaining:** External audio resolution itself still requires separate explicit authorization; do not interpret host paths as permitted input.
+- **Prevention:** Convert typed XML schema values before branch decisions, test legal lexical variants.
+
+## 2026-11-09 — Native FLP reconstruction had no qualified MIT writer or safe scaffold
+
+- **Symptom:** The universal DAWproject engine could export accurate position-aware MIDI and opaque original resources, but no native FL Studio project, playlist clips or offline FLP readback existed.
+- **Root cause:** An FLP writer was unqualified and the existing source parser is read-only; leading available writer candidates DawVert and PyFLP are GPLv3, not suitable as imported code in the public MIT fork. Creating FLP playlist events without observed format templates risks invalid projects.
+- **Solution:** Qualified a scoped, external MIT flpkit 0.9.0 package and implemented a template-based, copy-only FLP backend that requires a blank FL-authored scaffold. Map source note clips to existing pattern/track/channel slots, patch static tempo, then independently parse and compare native notes/playlist to source mapping. Receipt explicitly records loss and marks FL Studio application open/save/reopen as unverified. No GPL source imported, installed FL Studio not touched.
+- **Tests:** Public MIT binary fixtures provide synthetic composite FLP scaffold; a DAWproject fixture is converted to a native FLP offline. Exact FLP parser readback confirmed three keys/durations/positions, two playlist clips, and tempo. Source/template SHA-256 unchanged. Automated regressions cover existing destinations, invalid templates, partial nested-clip loss and structured MCP failures.
+- **Remaining:** Synthetic composite scaffold is parser-qualified only; a real deliberately FL-authored blank scaffold and native FL Studio open/save/reopen semantic comparison require owner permission. Audio, effect, plugin-state, automation, buses and most DAW features remain unsupported by this backend.
+- **Prevention:** Never equate a valid FLP event stream or parser readback with actual app acceptance; require independent native-app reopen evidence and per-feature fidelity receipts for completion.

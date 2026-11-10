@@ -49,16 +49,24 @@ https://github.com/user-attachments/assets/c2b1a5e7-1640-41fa-82bc-18ca7cbae9e8
 
 ### Universal Musical Project Intelligence (experimental)
 
-This maintained fork now offers two independent DAWproject 1.0 tools:
-`fl_inspect_universal_project` reads a versioned musical graph (tracks, clips,
-notes, tempo/meter, automation, device IDs, mixer destinations and asset hashes),
-while `fl_build_reconstruction_bundle` creates a **new**, non-overwriting folder
-containing per-track MIDI timelines, SHA-256-verified original embedded audio and
-plugin-state files, graph JSON, and an explicit fidelity receipt. This never
-modifies the source or starts FL Studio. **It does not yet create an FLP** or
-restore playlist clips, warps, effects or automation inside FL Studio.
+This maintained fork offers three DAWproject 1.0 interoperability tools:
+`fl_inspect_universal_project` builds a versioned musical graph (tracks, clips,
+notes, tempo/meter, automation, device identities, routing and resource hashes).
+`fl_build_reconstruction_bundle` creates a **new** non-overwriting folder with
+positioned MIDI, exact embedded assets, graph JSON and an explicit loss receipt.
+
+**NEW experimental native path:** `fl_build_native_flp_from_template` uses an
+explicitly supplied **blank FL-authored .flp scaffold** and the optional
+MIT-licensed `flpkit==0.9.0` backend (Python 3.11+) to write a **new native .flp**
+with supported note patterns, Playlist placements and static tempo. The output
+is re-read and structurally verified, including notes and clips. Existing source
+and template files are untouched; FL Studio is never launched by these tools.
+**Native FLP creation is not proof that FL Studio opens/saves it**, and no
+plugins, audio clips, automation, routing or stretched samples are restored.
+The detailed native fidelity receipt keeps the incomplete state explicit.
+
 See [universal reconstruction documentation](docs/UNIVERSAL_PROJECT_RECONSTRUCTION.md)
-for validation and incomplete native-DAW integration limits.
+and [native template backend](docs/NATIVE_FL_TEMPLATE_BACKEND.md).
 
 ### Transport Control
 

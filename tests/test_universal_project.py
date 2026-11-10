@@ -394,17 +394,18 @@ def test_nested_note_clip_does_not_emit_wrong_midi_ticks(tmp_path):
     )
 
 
-def test_external_dawproject_resource_is_not_read_from_host(tmp_path):
-    """External absolute media is classified as missing, never opened or copied."""
+@pytest.mark.parametrize("external_flag", ["true", " true ", "\t1\t", "\ntrue\n"])
+def test_external_dawproject_resource_is_not_read_from_host(tmp_path, external_flag):
+    """XML-schema boolean whitespace must not turn external files into ZIP members."""
     host_path = "C:\\private_samples\\user_kick.wav"
     xml = PROJECT_XML.replace(
         'path="audio/drum-loop.wav"',
-        f'path="{host_path}" external="true"',
+        f'path="{host_path}" external="{external_flag}"',
     )
     source = source_zip(tmp_path / "external.dawproject", xml=xml)
     graph = read_dawproject(str(source))
     assert len(graph["tracks"]) == 3
-    assert graph["clips"][-1]["audio"][0]["external"] == "true"
+    assert graph["clips"][-1]["audio"][0]["external"] is not None
     assert any(
         d["kind"] == "external_resource_not_read" and d["path"] == host_path
         for d in graph["diagnostics"]
