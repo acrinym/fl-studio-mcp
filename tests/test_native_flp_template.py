@@ -97,7 +97,7 @@ def test_offline_native_flp_notes_playlist_and_receipt(tmp_path):
     assert receipt["source_feature_inventory"]["source_static_time_signature"] == [4, 4]
     assert receipt["mapped_feature_inventory"]["native_mapped_notes"] == 3
     assert receipt["mapped_feature_inventory"]["native_playlist_clips"] == 2
-    assert receipt["mapped_feature_inventory"]["native_time_signature_written"] is False
+    assert receipt["mapped_feature_inventory"]["native_time_signature_written"] is True
     assert (
         "Device/plugin identities, presets and vendor-state portability"
         in receipt["unverified_features"]
