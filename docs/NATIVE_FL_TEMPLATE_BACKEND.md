@@ -8,12 +8,12 @@ template, and a previously nonexistent destination directory.
 
 An optional MIT-licensed **flpkit 0.9.0** backend edits a **COPY** of that
 template. It writes selected source notes into distinct native FL patterns,
-places those patterns on FL Playlist tracks, sets the static tempo and
+places those patterns on FL Playlist tracks, sets the static tempo and project meter, and
 re-reads the FLP binary. The result contains **reconstructed.flp**,
 **native_fidelity_receipt.json** and **project_graph.json**.
 
 The output is a native FLP binary, not a MIDI-only handoff. Its FLP parser
-readback is compared with every planned note key, channel, pattern, tick
+readback is compared with the project time signature and every planned note key, channel, pattern, tick
 position and length, Playlist clip position/length/pattern/track, and tempo.
 A mismatch fails and cleans up the unpublished output. FLP note velocities,
 including duplicate-note multiplicities, are checked against declared
@@ -57,7 +57,12 @@ The source, template and user-installed FL Studio remain untouched.
 Currently reconstructable: beat-time non-looping note clips, zero-based
 MIDI note channel, per-clip native pattern mapping, Playlist placement,
 source key/velocity/length, one source note-bearing track per template
-channel, and a single static tempo. Native PPQ can quantize timing; it is
+channel, a single static tempo and the source's static project time signature. The meter is
+patched only when the FL-authored scaffold already contains exactly one
+FLP numerator event (0x11) and one denominator event (0x12). No proprietary
+file reserialization or guessed event insertion occurs. The source meter is
+independently reread during the source-to-FLP semantic audit. Native PPQ can
+quantize timing; it is
 reported.
 
 NOT reconstructed: nested/looped/referenced clips, playStart offsets,
