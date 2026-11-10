@@ -32,7 +32,8 @@ handoff for FL Studio, with explicit per-feature fidelity accounting.
   `fl_build_native_flp_from_template` writes note patterns, Playlist placements
   and static tempo into a **new copy** of a deliberately blank FL-authored FLP.
   It uses MIT-licensed flpkit 0.9.0 (Python 3.11+), has per-clip and per-note
-  parser readback, and an explicit native fidelity receipt. A new standalone
+  parser readback, native project time-signature writing using existing FLP
+  numerator/denominator events, and an explicit native fidelity receipt. A new standalone
   `fl_audit_native_reconstruction` MCP tool independently verifies an existing
   bundle against the unchanged source DAWproject, FLP and declared source and
   mapped feature inventories. This source-to-FLP audit also runs before new
