@@ -173,5 +173,14 @@
 - **Root cause:** The behavioral contract changed from source-meter *not written* to source-meter *written*, but the older acceptance regression was not updated alongside the source and newer positive tests.
 - **Solution:** Corrected that assertion to true and retained the separate native-meter readback and tamper tests; also simplified the two-byte binary-patch regression into a direct changed-byte count assertion.
 - **Files/commits:** tests/test_native_flp_template.py (f473d2a, 7935251) and this WHATILEARNED.md case on draft PR #8.
-- **Verification:** Initial Linux GitHub Actions Python 3.12 run 42750780290 failed with 292 passed, 1 failed before the correction; Windows full suite also failed. **Corrected-head CI not yet verified when this case was written**. The prior failures are NOT promoted to green or hidden.
+- **Verification:** Initial Linux GitHub Actions Python 3.12 run 42750780290 failed with 292 passed, 1 failed before the correction; Windows full suite also failed. Corrected executable-source commit fb4f4e0 **passed 293/293 on Windows and 293/293 on Ubuntu**, plus Ruff lint and exact-file formatting, on cross-platform GitHub Actions run 42751111588. No claim of local WSL CI or real FL Studio app acceptance (the owner's laptop remained offline).
 - **Prevention:** Every change from a previously declared unsupported feature to a now-mapped native feature must update old loss/receipt tests as well as adding new positive reconstruction coverage, and both OS CI runners must qualify the exact new commit before declaring success.
+
+## 2026-11-09 — Ruff formatting exposed two incorrectly split regression comprehensions (PR #8)
+
+- **Symptom:** After the meter receipt assertion was repaired, GitHub Actions Linux runner 42750973759 passed all 293 tests but failed the separate Ruff formatting check for tests/test_native_flp_template.py at the new changed-byte list comprehension and existing-meter numerator locator comprehension.
+- **Root cause:** Manually authored multiline comprehension expressions did not match Ruff's canonical compact formatting, and the earlier failure at the test step had prevented the later formatter step from running.
+- **Solution:** Rewrote exactly the two flagged list comprehensions to the Ruff-proposed single-condition-line form in commit fb4f4e0. No behavior, assertions, production source or test inputs were weakened or bypassed.
+- **Files/commits:** tests/test_native_flp_template.py at fb4f4e049e2074eac13e6b165b6cd9419a0abd03; reusable GitHub Actions cross-platform workflow at .github/workflows/universal-project-ci.yml (e60a899).
+- **Verification:** On exact executable-source commit fb4f4e0, GitHub Actions run 42751111588: **Windows 293 tests passed**, **Ubuntu 293 tests passed**, Ruff lint clean on both, Ruff formatting clean on both. No claim of WSL local CI or FL Studio application open/save/reopen.
+- **Prevention:** Keep a separate, always-executed formatter step after functional tests on both Windows and Linux, and use the output's explicit recommended edit rather than suppressing the check.
