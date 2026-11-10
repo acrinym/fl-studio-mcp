@@ -92,6 +92,12 @@ def test_offline_native_flp_notes_playlist_and_receipt(tmp_path):
     assert receipt["native_flp_created"] is True
     assert receipt["note_status"] == "converted with declared mapping (offline only)"
     assert len(receipt["mapped_clips"]) == 2
+    assert receipt["source_feature_inventory"]["source_notes"] == 3
+    assert receipt["source_feature_inventory"]["source_clips"] == 2
+    assert receipt["source_feature_inventory"]["source_static_time_signature"] == [4, 4]
+    assert receipt["mapped_feature_inventory"]["native_mapped_notes"] == 3
+    assert receipt["mapped_feature_inventory"]["native_playlist_clips"] == 2
+    assert receipt["mapped_feature_inventory"]["native_time_signature_written"] is False
     assert (
         "Device/plugin identities, presets and vendor-state portability"
         in receipt["unverified_features"]
@@ -187,7 +193,7 @@ def test_native_readback_rejects_duplicate_count_mismatch():
     from fl_studio_mcp.utils.native_flp_template import _readback_matches
 
     clip = {"start": 0, "duration": 2}
-    note = {"key": 60, "time": 0, "duration": 1}
+    note = {"key": 60, "time": 0, "duration": 1, "velocity": 0.8}
     assignment = {
         "clip": clip,
         "notes": [note, note],
@@ -206,8 +212,8 @@ def test_native_readback_rejects_duplicate_count_mismatch():
             )
         ],
         notes=[
-            SimpleNamespace(pattern=1, channel=0, key=60, position=0, length=96),
-            SimpleNamespace(pattern=1, channel=0, key=64, position=0, length=96),
+            SimpleNamespace(pattern=1, channel=0, key=60, position=0, length=96, velocity=102),
+            SimpleNamespace(pattern=1, channel=0, key=64, position=0, length=96, velocity=102),
         ],
     )
     with pytest.raises(ValueError, match="note timing/identity"):
@@ -226,3 +232,161 @@ def test_native_note_release_gets_lossy_fidelity_receipt(tmp_path):
     assert receipt["source_notes_with_expression_or_release"] == 1
     assert receipt["note_status"] == "approximated / lossy"
     assert receipt["fl_studio_open_verified"] is False
+
+
+def test_native_post_generation_independent_semantic_audit(tmp_path):
+    """A second tool reads original source, stored graph, receipt, and FLP."""
+    pytest.importorskip("flpkit")
+    from fl_studio_mcp.utils.native_flp_audit import audit_native_flp_bundle
+
+    source = _source(tmp_path)
+    output = tmp_path / "native-audited"
+    build_native_flp_from_template(str(source), str(TEMPLATE), str(output))
+    before = {
+        path.name: path.read_bytes()
+        for path in (
+            source,
+            output / "project_graph.json",
+            output / "native_fidelity_receipt.json",
+            output / "reconstructed.flp",
+        )
+    }
+    verified = audit_native_flp_bundle(str(output), str(source))
+    assert verified["verified"] is True
+    assert verified["verified_notes"] == 3
+    assert verified["verified_clips"] == 2
+    assert verified["fl_studio_open_verified"] is False
+    assert verified["complete_automatic_conversion"] is False
+    for path in (
+        source,
+        output / "project_graph.json",
+        output / "native_fidelity_receipt.json",
+        output / "reconstructed.flp",
+    ):
+        assert path.read_bytes() == before[path.name]
+
+
+@pytest.mark.parametrize(
+    "tamper", ["native_flp", "receipt", "graph", "source", "mapped_clips", "inventory"]
+)
+def test_native_audit_rejects_tampering_and_false_receipts(tmp_path, tamper):
+    """Never accept a hash mismatch, changed original or rewritten mapping."""
+    pytest.importorskip("flpkit")
+    from fl_studio_mcp.utils.native_flp_audit import audit_native_flp_bundle
+
+    source = _source(tmp_path)
+    output = tmp_path / "export"
+    build_native_flp_from_template(str(source), str(TEMPLATE), str(output))
+    if tamper == "native_flp":
+        native = output / "reconstructed.flp"
+        native.write_bytes(native.read_bytes() + b"tampered")
+    elif tamper == "receipt":
+        receipt = output / "native_fidelity_receipt.json"
+        value = json.loads(receipt.read_text())
+        value["fl_studio_open_verified"] = True
+        receipt.write_text(json.dumps(value))
+    elif tamper == "graph":
+        graph = output / "project_graph.json"
+        value = json.loads(graph.read_text())
+        value["transport"]["bpm"] = 150
+        graph.write_text(json.dumps(value))
+    elif tamper == "source":
+        with zipfile.ZipFile(source, "a") as stream:
+            stream.writestr("extra.txt", b"source-changed")
+    elif tamper == "mapped_clips":
+        receipt = output / "native_fidelity_receipt.json"
+        value = json.loads(receipt.read_text())
+        value["mapped_clips"][0]["source_note_indices"] = [1]
+        receipt.write_text(json.dumps(value))
+    elif tamper == "inventory":
+        receipt = output / "native_fidelity_receipt.json"
+        value = json.loads(receipt.read_text())
+        value["source_feature_inventory"]["audio_clips"] = 0xFFFF
+        receipt.write_text(json.dumps(value))
+    with pytest.raises(ValueError):
+        audit_native_flp_bundle(str(output), str(source))
+
+
+def test_native_audit_mcp_error_is_structured_and_read_only(tmp_path):
+    """A missing FLP must be reported as verification failure by the MCP tool."""
+    source = _source(tmp_path)
+
+    class Registry:
+        def __init__(self):
+            self.fn = {}
+
+        def tool(self):
+            def collect(func):
+                self.fn[func.__name__] = func
+                return func
+
+            return collect
+
+    registered = Registry()
+    register_universal_project_tools(registered)
+    result = registered.fn["fl_audit_native_reconstruction"](
+        str(tmp_path / "missing-bundle"), str(source)
+    )
+    assert result["verified"] is False
+    assert result["read_only"] is True
+    assert result["fl_studio_open_verified"] is False
+
+
+def test_native_inventory_preserves_unmapped_audio_plugins_and_automation(tmp_path):
+    """Count all omitted musical features while qualifying only mapped native notes."""
+    pytest.importorskip("flpkit")
+    from fl_studio_mcp.utils.native_flp_audit import audit_native_flp_bundle
+
+    xml = SOURCE_XML.replace(
+        '<Volume value="0.8"/></Channel>',
+        '<Devices><ClapPlugin id="fx" deviceID="com.example.fx" deviceRole="audioFX"/>'
+        '</Devices><Volume value="0.8"/></Channel>',
+    ).replace(
+        "  </Clips></Lanes></Lanes></Arrangement>",
+        '    <Clip time="12" duration="4" name="Recorded audio">'
+        '<Audio sampleRate="44100" channels="2"><File path="C:\\sounds\\take.wav"'
+        ' external="true"/></Audio></Clip>'
+        '</Clips></Lanes></Lanes><Points target="volume" timeUnit="beats">'
+        '<RealPoint time="1" value="0.7"/></Points></Arrangement>',
+    )
+    source = _source(tmp_path, xml)
+    output = tmp_path / "full-accounting"
+    build_native_flp_from_template(str(source), str(TEMPLATE), str(output))
+    receipt = json.loads((output / "native_fidelity_receipt.json").read_text())
+    assert receipt["source_feature_inventory"]["source_clips"] == 3
+    assert receipt["source_feature_inventory"]["audio_clips"] == 1
+    assert receipt["source_feature_inventory"]["external_resource_refs"] == 1
+    assert receipt["source_feature_inventory"]["plugin_devices"] == 1
+    assert receipt["source_feature_inventory"]["automation_lanes"] == 1
+    assert receipt["mapped_feature_inventory"]["native_audio_clips"] == 0
+    assert receipt["mapped_feature_inventory"]["native_plugin_devices"] == 0
+    assert receipt["mapped_feature_inventory"]["native_automation_lanes"] == 0
+    assert audit_native_flp_bundle(str(output), str(source))["verified"] is True
+
+
+def test_native_semantic_audit_catches_velocity_forgery_with_matching_file_hash(tmp_path):
+    """A forged receipt hash cannot make changed musical velocities equivalent."""
+    flpkit = pytest.importorskip("flpkit")
+    from fl_studio_mcp.utils.native_flp_audit import audit_native_flp_bundle
+
+    source = _source(tmp_path)
+    output = tmp_path / "tampered-musically"
+    build_native_flp_from_template(str(source), str(TEMPLATE), str(output))
+    native = output / "reconstructed.flp"
+    flpkit.write_notes(
+        native,
+        [
+            flpkit.NoteSpec(key=60, start=0, length=1, velocity=0.1),
+            flpkit.NoteSpec(key=64, start=1.5, length=0.5, velocity=0.7),
+        ],
+        pattern=1,
+        channel=0,
+        mode="replace",
+    )
+    receipt_file = output / "native_fidelity_receipt.json"
+    receipt = json.loads(receipt_file.read_text())
+    # Even with forged output hash, the source's original note velocity rules.
+    receipt["output_flp_sha256"] = hashlib.sha256(native.read_bytes()).hexdigest()
+    receipt_file.write_text(json.dumps(receipt))
+    with pytest.raises(ValueError, match="note timing/identity"):
+        audit_native_flp_bundle(str(output), str(source))

@@ -6,6 +6,7 @@ import zipfile
 import zlib
 from typing import TYPE_CHECKING
 
+from fl_studio_mcp.utils.native_flp_audit import audit_native_flp_bundle
 from fl_studio_mcp.utils.native_flp_template import build_native_flp_from_template
 from fl_studio_mcp.utils.reconstruction_bundle import build_dawproject_bundle
 from fl_studio_mcp.utils.universal_project import read_dawproject
@@ -78,4 +79,25 @@ def register_universal_project_tools(mcp: FastMCP) -> None:
                 "fl_studio_open_verified": False,
                 "source_modified": False,
                 "template_modified": False,
+            }
+
+    @mcp.tool()
+    def fl_audit_native_reconstruction(output_dir: str, source_path: str) -> dict:
+        """Read-only source-to-FLP semantic verification of an existing new bundle.
+
+        Rehashes and reparses original DAWproject, source graph, fidelity receipt
+        and generated FLP; verifies note/clip identities, timing, velocity, loss
+        accounting and tempo. Never starts FL Studio or accesses user plugins.
+        Success means OFFLINE structural equivalence for supported features;
+        actual FL Studio application open/save/reopen remains UNVERIFIED.
+        """
+        try:
+            return audit_native_flp_bundle(output_dir, source_path)
+        except Exception as exc:
+            return {
+                "verified": False,
+                "error": f"{type(exc).__name__}: {exc}",
+                "read_only": True,
+                "fl_studio_open_verified": False,
+                "complete_automatic_conversion": False,
             }

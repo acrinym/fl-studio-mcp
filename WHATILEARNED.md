@@ -140,3 +140,20 @@
 - **Tests:** Public MIT binary fixtures provide synthetic composite FLP scaffold; a DAWproject fixture is converted to a native FLP offline. Exact FLP parser readback confirmed three keys/durations/positions, two playlist clips, and tempo. Source/template SHA-256 unchanged. Automated regressions cover existing destinations, invalid templates, partial nested-clip loss and structured MCP failures.
 - **Remaining:** Synthetic composite scaffold is parser-qualified only; a real deliberately FL-authored blank scaffold and native FL Studio open/save/reopen semantic comparison require owner permission. Audio, effect, plugin-state, automation, buses and most DAW features remain unsupported by this backend.
 - **Prevention:** Never equate a valid FLP event stream or parser readback with actual app acceptance; require independent native-app reopen evidence and per-feature fidelity receipts for completion.
+
+## 2026-11-09 — Native FLP verification needed independent source/receipt/FLP reconciliation
+
+- Symptom: Offline native writer checked FLP note pitch/time but omitted velocity; previous set comparisons could conceal duplicate events. A fidelity receipt could become stale or misrepresent content after published files changed. Source graph and unsupported media/effects/automation were not re-audited.
+- Root cause: Readback relied on writer-local plans, and receipt success was the writer's own statement rather than independently compared source-to-FLP evidence.
+- Solution: Native note readback now verifies quantized velocity plus Counter multiplicity of full note/clip tuples. New fl_audit_native_reconstruction reads the original DAWproject again, validates source/graph/FLP hashes, resolves stable source clip/note indices, checks skipped source content and tempo, and independently recomputes source vs mapped feature inventories (audio, devices, routing, sends, automation, warps, missing/external media). Writer must pass this second audit BEFORE publishing output. Both tools disclaim actual FL Studio app acceptance.
+- Tests: Successful independent semantic audit preserves all input/output bytes; changed source/graph, forged app-success flags, altered mappings, tampered source inventory, modified FLP, and false matching FLP hash with a musically different velocity are rejected. Source fixture contains unconverted plugin, external audio and automation to check receipt completeness.
+- Remaining: Parser readback cannot prove actual FL Studio app load/save/reopen. That still requires owner's permission with a disposable test. No installed DAW, original project or plugin was touched.
+- Prevention: Keep hash integrity, independently checked source-to-output structural equivalence and real native-app acceptance as three distinct qualification gates.
+
+## 2026-11-09 — XML attribute test normalized away its own whitespace cases
+
+- Symptom: external attribute test flags containing literal tabs/newlines passed even though an XML 1.0 parser normalizes such attribute whitespace to spaces.
+- Root cause: Constructed XML lexical input didn't preserve the characters the regression intended to exercise.
+- Solution: Use XML numeric references (&#9; tab, &#10; LF, &#13; CR) and assert the decoded raw parser value contains those characters.
+- Tests: Regression covers true, surrounding spaces, tab, LF, CR; external references remain excluded from host/ZIP read paths.
+- Prevention: Test the post-parser representation, not just input XML text.

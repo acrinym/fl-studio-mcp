@@ -394,7 +394,7 @@ def test_nested_note_clip_does_not_emit_wrong_midi_ticks(tmp_path):
     )
 
 
-@pytest.mark.parametrize("external_flag", ["true", " true ", "\t1\t", "\ntrue\n"])
+@pytest.mark.parametrize("external_flag", ["true", " true ", "&#9;1&#9;", "&#10;true&#10;&#13;"])
 def test_external_dawproject_resource_is_not_read_from_host(tmp_path, external_flag):
     """XML-schema boolean whitespace must not turn external files into ZIP members."""
     host_path = "C:\\private_samples\\user_kick.wav"
@@ -405,7 +405,14 @@ def test_external_dawproject_resource_is_not_read_from_host(tmp_path, external_f
     source = source_zip(tmp_path / "external.dawproject", xml=xml)
     graph = read_dawproject(str(source))
     assert len(graph["tracks"]) == 3
-    assert graph["clips"][-1]["audio"][0]["external"] is not None
+    observed_flag = graph["clips"][-1]["audio"][0]["external"]
+    assert observed_flag is not None
+    if "&#9;" in external_flag:
+        assert "\t" in observed_flag
+    if "&#10;" in external_flag:
+        assert "\n" in observed_flag
+    if "&#13;" in external_flag:
+        assert "\r" in observed_flag
     assert any(
         d["kind"] == "external_resource_not_read" and d["path"] == host_path
         for d in graph["diagnostics"]

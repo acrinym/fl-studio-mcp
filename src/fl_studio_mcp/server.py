@@ -61,9 +61,10 @@ Available tool categories:
 - Windows: Show, hide and focus FL Studio windows; retarget the piano roll
 - Project snapshot: Whole-project overview in one round-trip
 - Native files: Read-only FLP/FST/ZIP notes, clips, channels and mixer inventory (offline)
-- Universal projects: DAWproject 1.0 graph, reconstruction bundle, and optional
-  native FLP from a provided blank FL-authored template. Offline readback only:
-  actual FL Studio application open/save/reopen remains unverified.
+- Universal projects: DAWproject 1.0 graph, reconstruction bundle, optional
+  native FLP from a provided blank FL-authored template, and independent
+  source-to-FLP semantic fidelity audit. Offline readback ONLY: actual
+  FL Studio application open/save/reopen remains unverified.
 
 Important limitations:
 1. Effects can be loaded into mixer slots, but new instruments cannot be added to the channel rack.

@@ -15,13 +15,19 @@ re-reads the FLP binary. The result contains **reconstructed.flp**,
 The output is a native FLP binary, not a MIDI-only handoff. Its FLP parser
 readback is compared with every planned note key, channel, pattern, tick
 position and length, Playlist clip position/length/pattern/track, and tempo.
-A mismatch fails and cleans up the unpublished output.
+A mismatch fails and cleans up the unpublished output. FLP note velocities,
+including duplicate-note multiplicities, are checked against declared
+7-bit native velocity mapping. The builder also runs a separate source-to-FLP
+semantic audit before publishing output.
 
 **Real FL Studio application open/save/reopen is NOT verified.** FLP parser
 readback is not proof that FL Studio will load the file, plugins will sound,
 audio routes will work or the project will survive a native app re-save.
 The receipt explicitly marks FL Studio open verification, resave verification
-and complete automatic conversion as FALSE.
+and complete automatic conversion as FALSE. It also contains source and mapped
+feature inventories: native vs source clip/note counts, sample/audio clips,
+instrument/effect devices, routing, sends, tempo automation, other automation,
+time signature, warps, external-resource references and missing media.
 
 ## Inputs and safeguards
 
@@ -81,6 +87,27 @@ composite**. It has NOT been saved or reopened by FL Studio.
 Tests qualify the actual offline source-to-native-binary-to-parser-readback
 pipeline, non-overwrite behavior, invalid-input contracts and incomplete
 fidelity receipts. They do not prove real app acceptance.
+
+## Independently rerunning the semantic audit
+
+The fourth MCP operation, **fl_audit_native_reconstruction**, accepts
+**output_dir** (the completed reconstruction folder) and **source_path** (the
+original DAWproject). It is read-only: no output is written, no host sample
+paths are accessed, and FL Studio is not launched.
+
+The auditor re-parses the actual original source; verifies SHA-256 for the
+source, saved canonical graph and FLP; checks all declared clip indices and
+selected note indices against the current parsed graph; compares every native
+note pitch, position, length, velocity, channel and pattern with a multiset
+rather than a uniqueness-losing set; checks Playlist placement, count and
+tempo; and recomputes skipped content and feature inventories. False success
+flags, omitted notes, altered source data or a forged FLP hash with musically
+changed notes fail audit. A successful audit returns **verified: true**, with
+**fl_studio_open_verified: false** and **complete_automatic_conversion: false**.
+
+When creating a new FLP, the generator runs the same auditor *before* moving
+the staged output into its final new directory. If independent verification
+fails, the temporary output is removed rather than misrepresented as success.
 
 ## Licensing and next gate
 

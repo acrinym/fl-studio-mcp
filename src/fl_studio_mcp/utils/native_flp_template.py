@@ -31,11 +31,35 @@ def _sha(path: Path) -> str:
     return h.hexdigest()
 
 
+def _source_feature_inventory(graph: dict) -> dict:
+    """Account for native-app semantics we cannot reconstruct, not only notes."""
+    return {
+        "source_tracks": len(graph["tracks"]),
+        "source_static_time_signature": graph["transport"]["signature"],
+        "source_clips": len(graph["clips"]),
+        "source_notes": sum(len(c["notes"]) for c in graph["clips"]),
+        "audio_clips": sum(bool(c["audio"]) for c in graph["clips"]),
+        "warped_clips": sum(bool(c["warps"]) for c in graph["clips"]),
+        "nested_clip_envelopes": sum(bool(c["nested_clips"]) for c in graph["clips"]),
+        "plugin_devices": sum(len(t["devices"]) for t in graph["tracks"]),
+        "routing_destinations": sum(bool(t["destination"]) for t in graph["tracks"]),
+        "aux_sends": sum(len(t["sends"]) for t in graph["tracks"]),
+        "automation_lanes": len(graph["automation"]),
+        "tempo_automation_points": len(graph["transport"]["tempo_automation"]),
+        "markers": len(graph["markers"]),
+        "embedded_resources": sum(bool(r["available"]) for r in graph["resources"]),
+        "unavailable_resources": sum(not r["available"] for r in graph["resources"]),
+        "external_resource_refs": sum(
+            d["kind"] == "external_resource_not_read" for d in graph["diagnostics"]
+        ),
+    }
+
+
 def _note_clips(graph: dict) -> tuple[list[dict], list[dict]]:
     """Select reconstructable note clips without misrepresenting timing."""
     supported: list[dict] = []
     skipped: list[dict] = []
-    for clip in graph["clips"]:
+    for clip_index, clip in enumerate(graph["clips"]):
         if not clip["notes"]:
             continue
         errors = []
@@ -64,7 +88,8 @@ def _note_clips(graph: dict) -> tuple[list[dict], list[dict]]:
             )
             continue
         valid_notes = []
-        for note in clip["notes"]:
+        valid_indices = []
+        for note_index, note in enumerate(clip["notes"]):
             if (
                 note["channel"] != 0
                 or note["velocity"] <= 0
@@ -82,8 +107,16 @@ def _note_clips(graph: dict) -> tuple[list[dict], list[dict]]:
                 )
                 continue
             valid_notes.append(note)
+            valid_indices.append(note_index)
         if valid_notes:
-            supported.append({"clip": clip, "notes": valid_notes})
+            supported.append(
+                {
+                    "clip": clip,
+                    "clip_index": clip_index,
+                    "notes": valid_notes,
+                    "note_indices": valid_indices,
+                }
+            )
     return supported, skipped
 
 
@@ -108,6 +141,7 @@ def _readback_matches(project, assignments: list[dict], ppq: int) -> None:
                     note["key"],
                     round(note["time"] * ppq),
                     round(note["duration"] * ppq),
+                    round(note["velocity"] * 127),
                 )
             ] += 1
     actual_clips = Counter(
@@ -116,7 +150,7 @@ def _readback_matches(project, assignments: list[dict], ppq: int) -> None:
         if p.pattern is not None and p.arrangement == 0
     )
     actual_notes = Counter(
-        (n.pattern, n.channel, n.key, n.position, n.length) for n in project.notes
+        (n.pattern, n.channel, n.key, n.position, n.length, n.velocity) for n in project.notes
     )
     if actual_clips != expected_clips:
         raise ValueError(
@@ -209,7 +243,9 @@ def build_native_flp_from_template(source_path: str, template_path: str, output_
         assigned.append(
             {
                 "clip": clip,
+                "clip_index": element["clip_index"],
                 "notes": element["notes"],
+                "note_indices": element["note_indices"],
                 "pattern": p,
                 "channel": c,
                 "playlist_track": t,
@@ -254,7 +290,8 @@ def build_native_flp_from_template(source_path: str, template_path: str, output_
             raise ValueError("Native FLP offline read-back: tempo mismatch")
         if _sha(source) != source_sha or _sha(template) != template_sha:
             raise ValueError("Source or native template changed during reconstruction")
-        (staging / "project_graph.json").write_text(
+        graph_path = staging / "project_graph.json"
+        graph_path.write_text(
             json.dumps(graph, indent=2, sort_keys=True, ensure_ascii=False) + "\n",
             encoding="utf-8",
         )
@@ -268,6 +305,7 @@ def build_native_flp_from_template(source_path: str, template_path: str, output_
         receipts = {
             "schema": SCHEMA,
             "source_sha256": source_sha,
+            "project_graph_sha256": _sha(graph_path),
             "template_sha256": template_sha,
             "output_flp_sha256": _sha(result_path),
             "native_flp_created": True,
@@ -278,6 +316,19 @@ def build_native_flp_from_template(source_path: str, template_path: str, output_
             "backend": "flpkit==0.9.0 (MIT); FL-authored existing scaffold only",
             "source_notes": source_notes,
             "exported_notes": exported_notes,
+            "source_feature_inventory": _source_feature_inventory(graph),
+            "mapped_feature_inventory": {
+                "native_note_patterns": len(assigned),
+                "native_playlist_clips": len(assigned),
+                "native_mapped_notes": exported_notes,
+                "native_mapped_source_tracks": len(source_track_ids),
+                "native_static_tempo": 1,
+                "native_time_signature_written": False,
+                "native_audio_clips": 0,
+                "native_plugin_devices": 0,
+                "native_automation_lanes": 0,
+                "native_routing_destinations": 0,
+            },
             "source_notes_with_expression_or_release": expression_count,
             "note_status": "approximated / lossy"
             if (
@@ -291,6 +342,8 @@ def build_native_flp_from_template(source_path: str, template_path: str, output_
                 {
                     "source_track_id": x["clip"]["track_id"],
                     "source_clip": x["clip"]["name"],
+                    "source_clip_index": x["clip_index"],
+                    "source_note_indices": x["note_indices"],
                     "pattern": x["pattern"],
                     "channel": x["channel"],
                     "playlist_track": x["playlist_track"],
@@ -318,6 +371,10 @@ def build_native_flp_from_template(source_path: str, template_path: str, output_
             json.dumps(receipts, indent=2, sort_keys=True, ensure_ascii=False) + "\n",
             encoding="utf-8",
         )
+        # Independent post-generation audit must pass before publishing output.
+        from fl_studio_mcp.utils.native_flp_audit import audit_native_flp_bundle
+
+        audit_native_flp_bundle(str(staging), str(source))
         os.replace(staging, destination)
         complete = True
         return {

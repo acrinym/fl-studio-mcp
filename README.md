@@ -49,7 +49,7 @@ https://github.com/user-attachments/assets/c2b1a5e7-1640-41fa-82bc-18ca7cbae9e8
 
 ### Universal Musical Project Intelligence (experimental)
 
-This maintained fork offers three DAWproject 1.0 interoperability tools:
+This maintained fork offers four DAWproject 1.0 interoperability tools:
 `fl_inspect_universal_project` builds a versioned musical graph (tracks, clips,
 notes, tempo/meter, automation, device identities, routing and resource hashes).
 `fl_build_reconstruction_bundle` creates a **new** non-overwriting folder with
@@ -64,6 +64,12 @@ and template files are untouched; FL Studio is never launched by these tools.
 **Native FLP creation is not proof that FL Studio opens/saves it**, and no
 plugins, audio clips, automation, routing or stretched samples are restored.
 The detailed native fidelity receipt keeps the incomplete state explicit.
+`fl_audit_native_reconstruction(output_dir, source_path)` independently
+reparses the original DAWproject and generated native FLP, compares source/FLP
+note and Playlist mappings (including velocity and duplicate counts), checks
+resource and unsupported-feature accounting, and rejects forged or stale hashes.
+Native output is **audited again before it is published**. This is strictly
+**offline structural verification**, not FL Studio application acceptance.
 
 See [universal reconstruction documentation](docs/UNIVERSAL_PROJECT_RECONSTRUCTION.md)
 and [native template backend](docs/NATIVE_FL_TEMPLATE_BACKEND.md).
