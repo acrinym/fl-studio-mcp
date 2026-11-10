@@ -58,7 +58,8 @@ positioned MIDI, exact embedded assets, graph JSON and an explicit loss receipt.
 **NEW experimental native path:** `fl_build_native_flp_from_template` uses an
 explicitly supplied **blank FL-authored .flp scaffold** and the optional
 MIT-licensed `flpkit==0.9.0` backend (Python 3.11+) to write a **new native .flp**
-with supported note patterns, Playlist placements and static tempo. The output
+with supported note patterns, Playlist placements, static tempo and actual
+native project-meter events. The output
 is re-read and structurally verified, including notes and clips. Existing source
 and template files are untouched; FL Studio is never launched by these tools.
 **Native FLP creation is not proof that FL Studio opens/saves it**, and no
