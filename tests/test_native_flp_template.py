@@ -432,8 +432,7 @@ def test_native_meter_patcher_alters_only_existing_project_meter_bytes(tmp_path)
     after = copied.read_bytes()
     assert len(after) == len(before)
     changed_bytes = [
-        index for index, (previous, current) in enumerate(zip(before, after))
-        if previous != current
+        index for index, (previous, current) in enumerate(zip(before, after)) if previous != current
     ]
     assert len(changed_bytes) == 2
     assert read_native_meter(copied) == (7, 8)
@@ -470,8 +469,7 @@ def test_native_meter_requires_existing_events_not_guessed_additions(tmp_path):
     header, stream = codec.chunks(scaffold)
     base = 8 + len(header) + 8
     numerator_positions = [
-        base + off for event_id, off, size in codec.Stream(stream)
-        if event_id == 17 and size == 1
+        base + off for event_id, off, size in codec.Stream(stream) if event_id == 17 and size == 1
     ]
     assert len(numerator_positions) == 1
     scaffold[numerator_positions[0] - 1] = 19
