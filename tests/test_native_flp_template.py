@@ -390,3 +390,97 @@ def test_native_semantic_audit_catches_velocity_forgery_with_matching_file_hash(
     receipt_file.write_text(json.dumps(receipt))
     with pytest.raises(ValueError, match="note timing/identity"):
         audit_native_flp_bundle(str(output), str(source))
+
+
+@pytest.mark.parametrize("signature", [(3, 4), (7, 8), (5, 16)])
+def test_native_project_meter_reconstruction_from_source(tmp_path, signature):
+    """Change the actual FLP project meter, not merely report the source meter."""
+    pytest.importorskip("flpkit")
+    from fl_studio_mcp.utils.native_flp_audit import audit_native_flp_bundle
+    from fl_studio_mcp.utils.native_flp_meter import read_native_meter
+
+    numerator, denominator = signature
+    xml = SOURCE_XML.replace(
+        'numerator="4" denominator="4"',
+        f'numerator="{numerator}" denominator="{denominator}"',
+    )
+    source = _source(tmp_path, xml)
+    source_before = source.read_bytes()
+    template_before = TEMPLATE.read_bytes()
+    output = tmp_path / "native-meter"
+    result = build_native_flp_from_template(str(source), str(TEMPLATE), str(output))
+    assert result["offline_flp_readback_verified"] is True
+    assert read_native_meter(output / "reconstructed.flp") == signature
+    receipt = json.loads((output / "native_fidelity_receipt.json").read_text())
+    assert receipt["source_feature_inventory"]["source_static_time_signature"] == list(signature)
+    assert receipt["mapped_feature_inventory"]["native_time_signature_written"] is True
+    assert audit_native_flp_bundle(str(output), str(source))["verified"] is True
+    assert source.read_bytes() == source_before
+    assert TEMPLATE.read_bytes() == template_before
+
+
+def test_native_meter_patcher_alters_only_existing_project_meter_bytes(tmp_path):
+    """Do not reserialize unknown proprietary FLP data to adjust the meter."""
+    pytest.importorskip("flpkit")
+    from fl_studio_mcp.utils.native_flp_meter import read_native_meter, set_native_meter
+
+    copied = tmp_path / "copied-scaffold.flp"
+    before = TEMPLATE.read_bytes()
+    copied.write_bytes(before)
+    assert read_native_meter(copied) == (4, 4)
+    set_native_meter(copied, 7, 8)
+    after = copied.read_bytes()
+    assert len(after) == len(before)
+    assert [index for index, (old, new) in enumerate(zip(before, after)) if old != new] and len(
+        [index for index, (old, new) in enumerate(zip(before, after)) if old != new]
+    ) == 2
+    assert read_native_meter(copied) == (7, 8)
+    assert TEMPLATE.read_bytes() == before
+
+
+def test_native_meter_tampering_rejected_even_with_forged_matching_hash(tmp_path):
+    """Changing the output time signature is a musical difference, not success."""
+    pytest.importorskip("flpkit")
+    from fl_studio_mcp.utils.native_flp_audit import audit_native_flp_bundle
+    from fl_studio_mcp.utils.native_flp_meter import set_native_meter
+
+    source = _source(tmp_path)
+    output = tmp_path / "meter-tampering"
+    build_native_flp_from_template(str(source), str(TEMPLATE), str(output))
+    flp = output / "reconstructed.flp"
+    set_native_meter(flp, 3, 4)
+    receipt_path = output / "native_fidelity_receipt.json"
+    receipt = json.loads(receipt_path.read_text())
+    receipt["output_flp_sha256"] = hashlib.sha256(flp.read_bytes()).hexdigest()
+    receipt_path.write_text(json.dumps(receipt))
+    with pytest.raises(ValueError, match="time signature"):
+        audit_native_flp_bundle(str(output), str(source))
+
+
+def test_native_meter_requires_existing_events_not_guessed_additions(tmp_path):
+    """A template with no original time-signature numerator cannot be edited."""
+    pytest.importorskip("flpkit")
+    from flpkit import codec
+
+    from fl_studio_mcp.utils.native_flp_meter import read_native_meter, set_native_meter
+
+    scaffold = bytearray(TEMPLATE.read_bytes())
+    header, stream = codec.chunks(scaffold)
+    base = 8 + len(header) + 8
+    numerator_positions = [
+        base + off for event_id, off, size in codec.Stream(stream)
+        if event_id == 17 and size == 1
+    ]
+    assert len(numerator_positions) == 1
+    scaffold[numerator_positions[0] - 1] = 19
+    broken = tmp_path / "no-meter-template.flp"
+    broken.write_bytes(scaffold)
+    with pytest.raises(ValueError, match="exactly one"):
+        read_native_meter(broken)
+    with pytest.raises(ValueError, match="exactly one"):
+        set_native_meter(broken, 3, 4)
+    source = _source(tmp_path)
+    output = tmp_path / "should-not-exist"
+    with pytest.raises(ValueError, match="exactly one"):
+        build_native_flp_from_template(str(source), str(broken), str(output))
+    assert not output.exists()
