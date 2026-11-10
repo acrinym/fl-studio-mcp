@@ -431,9 +431,11 @@ def test_native_meter_patcher_alters_only_existing_project_meter_bytes(tmp_path)
     set_native_meter(copied, 7, 8)
     after = copied.read_bytes()
     assert len(after) == len(before)
-    assert [index for index, (old, new) in enumerate(zip(before, after)) if old != new] and len(
-        [index for index, (old, new) in enumerate(zip(before, after)) if old != new]
-    ) == 2
+    changed_bytes = [
+        index for index, (previous, current) in enumerate(zip(before, after))
+        if previous != current
+    ]
+    assert len(changed_bytes) == 2
     assert read_native_meter(copied) == (7, 8)
     assert TEMPLATE.read_bytes() == before
 
