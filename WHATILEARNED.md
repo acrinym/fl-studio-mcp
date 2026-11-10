@@ -1,0 +1,186 @@
+# What I Learned — FL Studio MCP
+
+## 2026-11-09 — Universal project export cannot imply native FLP reconstruction
+
+- **Issue / PR:** Universal Musical Project Engine, feature branch
+  `feature/dawproject-universal-reconstruction`; PR pending review.
+- **Symptom/gap:** Our native FLP parser can inspect structures but has no
+  qualified writer. Standard MIDI can restore notes but not complete FL Studio
+  clip instances, audio warps, automation, proprietary instruments and buses.
+- **Root cause:** Reading an undocumented binary event stream is not the
+  inverse of safely serializing/reopening that application version's format;
+  standalone MIDI carries only a subset of project semantics.
+- **Solution:** Implement a bounded, versioned DAWproject graph with explicit
+  track/clip/media/device relationships, preserve referenced embedded resources
+  byte-for-byte, create importable per-track MIDI and a receipt that declares
+  which semantics are unmapped. Always report `native_flp_created: false`
+  and `fl_studio_open_verified: false`.
+- **Changed files:** `src/fl_studio_mcp/utils/universal_project.py`,
+  `src/fl_studio_mcp/utils/reconstruction_bundle.py`,
+  `src/fl_studio_mcp/tools/universal_project.py`, registrations and tests.
+- **Verification:** Synthetic source-to-bundle E2E tests; actual published
+  Bitwig 5.1.6 `canon.dawproject` produced 27 of 27 notes with 1 preserved
+  audio sample and no file errors. Source SHA-256:
+  `ca106382d181b88268a4ae39d1e524a11167facd8b69d147125f8fd736a57f89`.
+  No FL Studio live app or native saved FLP has been tested.
+- **Remaining:** Actual source-format-to-native-FLP roundtrip and editable
+  clip/effects/automation reconstruction are open and require proper runtime
+  qualification; a successful package export is not completion.
+- **Regression guard:** Tests assert source and media hashes, MIDI event
+  positions, limitation flags, malformed input rejection, missing resources,
+  unsupported clip time, loops and unsafe ZIP paths.
+- **Commit/merge evidence:** Tracked in linked feature branch; do not call
+  merged until final review and normal two-parent merge receipt exist.
+
+## 2026-11-09 — Orphaned clip notes lost from attempted export count
+
+- **Issue:** Discovered while implementing universal reconstruction receipt.
+- **Symptom/gap:** Source clips referencing a missing track could be ignored
+  entirely when summing only notes of enumerated destination tracks, yielding
+  a false `source_notes=0` and apparent success despite source notes existing.
+- **Root cause:** Source-note accounting occurred inside the per-known-track
+  exporter loop rather than over the complete source clip graph.
+- **Solution:** Count source notes globally from all clips; separately count
+  exported events, detect unresolved clip track references and issue explicit
+  lossy status and diagnostic.
+- **Changed files:** `src/fl_studio_mcp/utils/reconstruction_bundle.py`,
+  `src/fl_studio_mcp/utils/universal_project.py`,
+  `tests/test_universal_project.py`.
+- **Verification:** Dedicated `test_orphan_clip_notes_are_counted_as_unconverted`
+  checks 3 source notes, 0 exported notes, missing-track diagnostic and loss
+  receipt. Full Windows and WSL suites both passed 264 tests at the source state
+  before commit; final-head smoke and Git diff checks remain required.
+- **Remaining:** An operator must resolve missing track links before automatic
+  native DAW reconstruction.
+- **Regression guard:** Preserve this as a mandatory source-vs-export cardinality
+  test; never derive source cardinality solely from successful exports.
+- **Commit/merge evidence:** Feature branch pending PR/review.
+
+## 2026-11-09 — WSL CI missing MIDI package while Windows passed
+
+- **Issue:** Initial new-source qualification WSL import failed.
+- **Symptom/gap:** WSL pytest collection raised `ModuleNotFoundError: mido`
+  although the Windows project virtualenv had the dependency.
+- **Root cause:** Existing shared/global WSL pytest interpreter did not include
+  project's runtime MIDI dependency. Reusing shared Windows `.venv` in WSL is
+  explicitly prohibited because it can replace its interpreter/packages.
+- **Solution:** Create a reusable, independent WSL environment at
+  `~/.venvs/flstudio-mcp-ci` with `uv venv` and install `pytest`,
+  `mido` and `ruff`. Execute WSL source via canonical
+  `/mnt/d/GitHub/AI/FLStudioMCP` path (no duplicate repo/worktree).
+- **Changed files:** No product source change required for environment;
+  targeted CI uses the reusable WSL toolchain.
+- **Verification:** Targeted WSL suite passed 11 tests after environment
+  restoration; subsequently Windows and WSL full suites each passed
+  264 tests at the source state before commit.
+- **Remaining:** Full WSL tests may require additional runtime packages;
+  do not silently suppress them.
+- **Regression guard:** Keep WSL CI executable isolated from Windows `.venv`;
+  check interpreter package coverage before concluding source regression.
+- **Commit/merge evidence:** Environment-only corrective action, not a source PR.
+
+## 2026-11-09 — CodeRabbit PR #8: nested notes exported at incorrect outer-clip timestamps
+
+- **Issue/PR:** #8, review thread `PRRT_kwDOVW6CJs61d1x5`; initial source `c8c8154`.
+- **Symptom:** Notes found under nested `Clip` nodes were flattened onto the outer clip using the wrong starting position, despite a positive conversion-fidelity receipt.
+- **Root cause:** The reader's recursive `_descendants(..., "Note")` collected inner notes, while the MIDI writer had no nested clip offset/play-window translation.
+- **Solution:** The writer now excludes note-bearing clips with nested `Clip` descendants from MIDI export and records `nested_clip_timing_not_resolved`; it counts every original note as unconverted. This repairs the **false exact-fidelity claim**. Correctly rebuilding nested-clip playback remains a separate open implementation, not claimed fixed.
+- **Changed files:** `src/fl_studio_mcp/utils/reconstruction_bundle.py`, `tests/test_universal_project.py`.
+- **Verification:** `test_nested_note_clip_does_not_emit_wrong_midi_ticks` confirms inner clip notes are not emitted at false ticks and that the receipt reports loss; both full WSL and Windows suites passed 267 tests on the corrected source before commit.
+- **Remaining:** Actual nested clip/timing reconstruction is open.
+- **Prevention:** Preserve source-count vs exported-count invariant and explicit nested-timing test on every writer update.
+
+## 2026-11-09 — CodeRabbit PR #8: malformed DAWproject archive escaped MCP handler
+
+- **Issue/PR:** #8, review thread `PRRT_kwDOVW6CJs61d1x0`.
+- **Symptom:** A corrupt `.dawproject` ZIP caused raw `BadZipFile` (and related deflate errors) to escape the inspection MCP tool; build and inspect tools handled failures inconsistently.
+- **Root cause:** The two tool boundaries used different, incomplete exception tuples.
+- **Solution:** One shared `_EXPECTED_ARCHIVE_ERRORS` tuple now handles relevant malformed ZIP and decompression errors in both MCP entrypoints, returning structured failures without treating invalid files as successful.
+- **Changed files:** `src/fl_studio_mcp/tools/universal_project.py`, `tests/test_universal_project.py`.
+- **Verification:** `test_corrupt_archive_returns_structured_error_from_both_tools` checks both return structured `BadZipFile` errors and do not create an output directory.
+- **Remaining:** The underlying malformed source remains rejected, not silently repaired.
+- **Prevention:** Regression test both wrappers whenever archive parsing behavior changes.
+
+## 2026-11-09 — CodeRabbit PR #8: external audio path rejected entire source graph
+
+- **Issue/PR:** #8, review thread `PRRT_kwDOVW6CJs61d1yF`.
+- **Symptom:** A valid DAWproject with `File external="true"` and an absolute sample path failed the whole import due to the embedded-ZIP path sanitizer.
+- **Root cause:** Embedded resource discovery did not distinguish **external references** from archive members.
+- **Solution:** Preserve the `external` metadata, skip host-path I/O for external refs, add an `external_resource_not_read` diagnostic and an explicit unavailable/missing source-resource count in the fidelity receipt. Embedded resources are independently preserved.
+- **Changed files:** `src/fl_studio_mcp/utils/universal_project.py`, `src/fl_studio_mcp/utils/reconstruction_bundle.py`, `tests/test_universal_project.py`.
+- **Verification:** `test_external_dawproject_resource_is_not_read_from_host` confirms the graph loads, excludes host paths from read/copy, and still copies embedded plugin state.
+- **Remaining:** Restoring external samples requires separate owner-approved asset resolution, not a filesystem guess.
+- **Prevention:** Keep ZIP and host-resource classes distinct and reject host-file access by default.
+
+## 2026-11-09 — CodeRabbit PR #8: track-hierarchy test was a no-op
+
+- **Issue/PR:** #8 review nitpick and premerge Docstring Coverage check.
+- **Symptom:** A test claimed to exercise nested track parentage, but its XML string replacement changed nothing; new functions also lacked descriptive docstrings.
+- **Root cause:** The fixture never constructed a nested `Track`, and the code lacked explicit documentation coverage for changed functions.
+- **Solution:** Insert a real nested child track in the fixture, assert parent ID and root parent absence, and document the helper/tool/test function contracts.
+- **Changed files:** `tests/test_universal_project.py` and new universal project modules.
+- **Verification:** Full WSL and Windows suites each passed 267 tests on corrected source, Ruff lint and format clean; independent exact-head rereview still required.
+- **Remaining:** No claim of FL Studio-native interpretation until actual application reopen qualification.
+- **Prevention:** Assert behavior exercised by each test name; prefer meaningful docstrings, not suppression of review checks.
+
+## 2026-11-09 — PR #8 re-review: XSD boolean whitespace broke external-resource isolation
+
+- **Symptom:** XML Schema allows surrounding XML whitespace in an external=true boolean. The parser compared exact strings and treated external=" true " as an internal ZIP path, eventually rejecting the entire source.
+- **Root cause:** An XML boolean attribute was compared without applying the schema's whitespace-collapse semantics.
+- **Solution:** Strip XML spaces, tabs, carriage returns and line feeds before recognizing canonical XSD true/1. External references remain graph-only; no host-path I/O.
+- **Tests:** Parameterized external resource regression for true, surrounding spaces, tabs/1, and line breaks/true. WSL targeted test group 21/21 before native backend expansion.
+- **Remaining:** External audio resolution itself still requires separate explicit authorization; do not interpret host paths as permitted input.
+- **Prevention:** Convert typed XML schema values before branch decisions, test legal lexical variants.
+
+## 2026-11-09 — Native FLP reconstruction had no qualified MIT writer or safe scaffold
+
+- **Symptom:** The universal DAWproject engine could export accurate position-aware MIDI and opaque original resources, but no native FL Studio project, playlist clips or offline FLP readback existed.
+- **Root cause:** An FLP writer was unqualified and the existing source parser is read-only; leading available writer candidates DawVert and PyFLP are GPLv3, not suitable as imported code in the public MIT fork. Creating FLP playlist events without observed format templates risks invalid projects.
+- **Solution:** Qualified a scoped, external MIT flpkit 0.9.0 package and implemented a template-based, copy-only FLP backend that requires a blank FL-authored scaffold. Map source note clips to existing pattern/track/channel slots, patch static tempo, then independently parse and compare native notes/playlist to source mapping. Receipt explicitly records loss and marks FL Studio application open/save/reopen as unverified. No GPL source imported, installed FL Studio not touched.
+- **Tests:** Public MIT binary fixtures provide synthetic composite FLP scaffold; a DAWproject fixture is converted to a native FLP offline. Exact FLP parser readback confirmed three keys/durations/positions, two playlist clips, and tempo. Source/template SHA-256 unchanged. Automated regressions cover existing destinations, invalid templates, partial nested-clip loss and structured MCP failures.
+- **Remaining:** Synthetic composite scaffold is parser-qualified only; a real deliberately FL-authored blank scaffold and native FL Studio open/save/reopen semantic comparison require owner permission. Audio, effect, plugin-state, automation, buses and most DAW features remain unsupported by this backend.
+- **Prevention:** Never equate a valid FLP event stream or parser readback with actual app acceptance; require independent native-app reopen evidence and per-feature fidelity receipts for completion.
+
+## 2026-11-09 — Native FLP verification needed independent source/receipt/FLP reconciliation
+
+- Symptom: Offline native writer checked FLP note pitch/time but omitted velocity; previous set comparisons could conceal duplicate events. A fidelity receipt could become stale or misrepresent content after published files changed. Source graph and unsupported media/effects/automation were not re-audited.
+- Root cause: Readback relied on writer-local plans, and receipt success was the writer's own statement rather than independently compared source-to-FLP evidence.
+- Solution: Native note readback now verifies quantized velocity plus Counter multiplicity of full note/clip tuples. New fl_audit_native_reconstruction reads the original DAWproject again, validates source/graph/FLP hashes, resolves stable source clip/note indices, checks skipped source content and tempo, and independently recomputes source vs mapped feature inventories (audio, devices, routing, sends, automation, warps, missing/external media). Writer must pass this second audit BEFORE publishing output. Both tools disclaim actual FL Studio app acceptance.
+- Tests: Successful independent semantic audit preserves all input/output bytes; changed source/graph, forged app-success flags, altered mappings, tampered source inventory, modified FLP, and false matching FLP hash with a musically different velocity are rejected. Source fixture contains unconverted plugin, external audio and automation to check receipt completeness.
+- Remaining: Parser readback cannot prove actual FL Studio app load/save/reopen. That still requires owner's permission with a disposable test. No installed DAW, original project or plugin was touched.
+- Prevention: Keep hash integrity, independently checked source-to-output structural equivalence and real native-app acceptance as three distinct qualification gates.
+
+## 2026-11-09 — XML attribute test normalized away its own whitespace cases
+
+- Symptom: external attribute test flags containing literal tabs/newlines passed even though an XML 1.0 parser normalizes such attribute whitespace to spaces.
+- Root cause: Constructed XML lexical input didn't preserve the characters the regression intended to exercise.
+- Solution: Use XML numeric references (&#9; tab, &#10; LF, &#13; CR) and assert the decoded raw parser value contains those characters.
+- Tests: Regression covers true, surrounding spaces, tab, LF, CR; external references remain excluded from host/ZIP read paths.
+- Prevention: Test the post-parser representation, not just input XML text.
+
+## 2026-11-09 — DAWproject source meter was silently left as the FLP template's 4/4
+
+- **Issue:** PR #8, native source-to-FLP project meter. The previous native builder wrote notes, playlist clips and BPM but left the copied scaffold's existing project time signature unchanged even when DAWproject specified e.g. 3/4 or 7/8; the receipt explicitly reported meter as not written.
+- **Root cause:** flpkit 0.9.0 provides a tempo writer but does not expose a project-meter writer. The native reconstruction path therefore never touched the FLP's two project-global time-signature events.
+- **Solution:** Added native_flp_meter.py to use flpkit's event-stream walker to locate exactly one existing single-byte FLP event 0x11 (numerator) and 0x12 (denominator), validate legal meter values, patch only those two bytes in the copied staged FLP and reread them. The builder refuses templates with missing/ambiguous meter events rather than fabricating proprietary FLP event placement. Its independent audit re-reads the generated native signature against the original parsed DAWproject, and the receipt now marks source static meter genuinely written.
+- **Files/commits:** src/fl_studio_mcp/utils/native_flp_meter.py (6f48af7), native_flp_template.py (c00a8a7), native_flp_audit.py (53048ed), tests/test_native_flp_template.py (a5ad225), source documentation updated in subsequent commits on PR #8.
+- **Verification:** Inspected exact committed MIT FL Studio 25 synthetic scaffold bytes with FLP event-frame parsing: the file contains precisely one each of events 0x11/0x12 with 4/4 values and valid event-stream framing. Added regression tests for 3/4, 7/8, 5/16 reconstruction and independent readback; two-byte-only change on a copied scaffold; rejection of absent meter; and forged-output-hash meter tampering. **Important: WSL and Windows suites have NOT been run on this new remote-only commit series because the authorized Remote Desktop device was offline; do not repeat earlier 287/287 passing results as verification of this head.** Actual FL Studio application open/save/reopen remains unverified. The PR is DRAFT.
+- **Prevention:** Every mapped static source property requires a native binary write, independent source-based readback, and a loss status, not merely copying it into the source graph or claiming it was preserved.
+
+## 2026-11-09 — Full CI caught the stale native time-signature receipt assertion (PR #8)
+
+- **Symptom:** New GitHub Actions Python 3.12 Linux and Windows full-suite jobs initially failed at tests/test_native_flp_template.py:100: the pre-existing fixture test still expected native_time_signature_written to be false after the actual writer began preserving the meter. At first exact head e60a899, 292 tests passed and one failed on Linux; Windows reported the same full-suite step failure.
+- **Root cause:** The behavioral contract changed from source-meter *not written* to source-meter *written*, but the older acceptance regression was not updated alongside the source and newer positive tests.
+- **Solution:** Corrected that assertion to true and retained the separate native-meter readback and tamper tests; also simplified the two-byte binary-patch regression into a direct changed-byte count assertion.
+- **Files/commits:** tests/test_native_flp_template.py (f473d2a, 7935251) and this WHATILEARNED.md case on draft PR #8.
+- **Verification:** Initial Linux GitHub Actions Python 3.12 run 42750780290 failed with 292 passed, 1 failed before the correction; Windows full suite also failed. Corrected executable-source commit fb4f4e0 **passed 293/293 on Windows and 293/293 on Ubuntu**, plus Ruff lint and exact-file formatting, on cross-platform GitHub Actions run 42751111588. No claim of local WSL CI or real FL Studio app acceptance (the owner's laptop remained offline).
+- **Prevention:** Every change from a previously declared unsupported feature to a now-mapped native feature must update old loss/receipt tests as well as adding new positive reconstruction coverage, and both OS CI runners must qualify the exact new commit before declaring success.
+
+## 2026-11-09 — Ruff formatting exposed two incorrectly split regression comprehensions (PR #8)
+
+- **Symptom:** After the meter receipt assertion was repaired, GitHub Actions Linux runner 42750973759 passed all 293 tests but failed the separate Ruff formatting check for tests/test_native_flp_template.py at the new changed-byte list comprehension and existing-meter numerator locator comprehension.
+- **Root cause:** Manually authored multiline comprehension expressions did not match Ruff's canonical compact formatting, and the earlier failure at the test step had prevented the later formatter step from running.
+- **Solution:** Rewrote exactly the two flagged list comprehensions to the Ruff-proposed single-condition-line form in commit fb4f4e0. No behavior, assertions, production source or test inputs were weakened or bypassed.
+- **Files/commits:** tests/test_native_flp_template.py at fb4f4e049e2074eac13e6b165b6cd9419a0abd03; reusable GitHub Actions cross-platform workflow at .github/workflows/universal-project-ci.yml (e60a899).
+- **Verification:** On exact executable-source commit fb4f4e0, GitHub Actions run 42751111588: **Windows 293 tests passed**, **Ubuntu 293 tests passed**, Ruff lint clean on both, Ruff formatting clean on both. No claim of WSL local CI or FL Studio application open/save/reopen.
+- **Prevention:** Keep a separate, always-executed formatter step after functional tests on both Windows and Linux, and use the output's explicit recommended edit rather than suppressing the check.

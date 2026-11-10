@@ -55,6 +55,16 @@ Operating abstraction: **one musical intention -> inspected candidates -> author
 - **Transactions:** future modifications create a disposable copy, calculate before/after semantic diff, save a receipt, reopen the copy in FL Studio and roll back on mismatch.
 - **Tests:** synthetic corruption/truncation/ZIP traversal fixtures plus read-only checks against authorized real-world FST and zipped-project fixtures. Never mutate originals.
 
+## Universal project milestone U1 — implemented source-graph/reconstruction handoff
+
+The DAWproject 1.0 `fl_inspect_universal_project` parser and
+`fl_build_reconstruction_bundle` now recover a versioned DAW-agnostic graph,
+MIDI per source track, original hashed embedded media/state resources and an
+explicit loss/unknown receipt. See `UNIVERSAL_PROJECT_RECONSTRUCTION.md` for
+bounded real-project and synthetic test evidence. This is **not** a native FLP
+writer, live FL Studio reconstruction, or full cross-DAW conversion. Native
+application and plugin/automation/warp fidelity remain unverified.
+
 ## Next milestones (not yet implemented)
 
 **B. Project graph (in progress):** optional read-only pattern-to-rack-channel note graph is implemented with bounded output. The new optional playlist graph maps documented 32/60-byte arrangement clip records to pattern IDs, 1-based playlist tracks when a 199/500-track schema is present, and each pattern's decoded rack-channel note counts. Unknown layouts are reported, not guessed. Channel identification now resolves FLP channel IDs to user-facing labels, type, verified native-plugin internal name and direct mixer insert index; playlist clips use those identities when available. Third-party VST identity remains unknown behind Fruity Wrapper. Initial mixer inventory now recognizes FL mixer record events (236 flags, 204 label, 235 routing masks, 98 effect slot indices, 225 post-EQ/slot parameters), bounds output, separates plugin labels from opaque vendor chunks, and reports raw controls without pretending to normalize or verify active routes. Still needed: independently qualify raw mixer-record-index to GUI insert mapping, live routing/FX parity, proprietary VST identification through supported APIs, structural diff, and live FL Studio parity tests.
