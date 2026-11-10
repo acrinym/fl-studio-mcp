@@ -16,6 +16,7 @@ import tempfile
 from collections import Counter
 from pathlib import Path
 
+from fl_studio_mcp.utils.native_flp_meter import read_native_meter, set_native_meter
 from fl_studio_mcp.utils.universal_project import read_dawproject
 
 MAX_TEMPLATE_BYTES = 128 * 1024 * 1024
@@ -192,6 +193,8 @@ def build_native_flp_from_template(source_path: str, template_path: str, output_
     graph = read_dawproject(str(source))
     source_sha, template_sha = graph["source"]["sha256"], _sha(template)
     baseline = flpkit.read(template)
+    # Meter events must already exist in the FL-authored scaffold: no guessed insertion.
+    read_native_meter(template)
     if baseline.trial_saved:
         raise ValueError("Trial-saved FLP templates are not eligible for reconstruction")
     if baseline.notes:
@@ -257,6 +260,7 @@ def build_native_flp_from_template(source_path: str, template_path: str, output_
         result_path = staging / "reconstructed.flp"
         shutil.copyfile(template, result_path)
         flpkit.set_tempo(result_path, graph["transport"]["bpm"])
+        set_native_meter(result_path, *graph["transport"]["signature"])
         for entry in assigned:
             notes = [
                 flpkit.NoteSpec(
@@ -288,6 +292,8 @@ def build_native_flp_from_template(source_path: str, template_path: str, output_
         _readback_matches(verified, assigned, baseline.ppq)
         if verified.tempo is None or abs(verified.tempo - graph["transport"]["bpm"]) > 0.01:
             raise ValueError("Native FLP offline read-back: tempo mismatch")
+        if read_native_meter(result_path) != tuple(graph["transport"]["signature"]):
+            raise ValueError("Native FLP offline read-back: project time signature mismatch")
         if _sha(source) != source_sha or _sha(template) != template_sha:
             raise ValueError("Source or native template changed during reconstruction")
         graph_path = staging / "project_graph.json"
@@ -323,7 +329,7 @@ def build_native_flp_from_template(source_path: str, template_path: str, output_
                 "native_mapped_notes": exported_notes,
                 "native_mapped_source_tracks": len(source_track_ids),
                 "native_static_tempo": 1,
-                "native_time_signature_written": False,
+                "native_time_signature_written": True,
                 "native_audio_clips": 0,
                 "native_plugin_devices": 0,
                 "native_automation_lanes": 0,
@@ -363,8 +369,8 @@ def build_native_flp_from_template(source_path: str, template_path: str, output_
             ],
             "diagnostics": graph["diagnostics"],
             "template_fidelity": (
-                "Existing template copied; only selected FLP note, playlist and tempo "
-                "events patched"
+                "Existing template copied; only selected native FLP note, playlist, "
+                "tempo and project-meter events patched"
             ),
         }
         (staging / "native_fidelity_receipt.json").write_text(
