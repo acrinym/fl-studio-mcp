@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from fl_studio_mcp.utils.native_flp_meter import read_native_meter
 from fl_studio_mcp.utils.native_flp_template import (
     SCHEMA,
     _note_clips,
@@ -152,7 +153,7 @@ def audit_native_flp_bundle(output_dir: str, source_path: str) -> dict:
         "native_mapped_notes": exported_notes,
         "native_mapped_source_tracks": len(slots),
         "native_static_tempo": 1,
-        "native_time_signature_written": False,
+        "native_time_signature_written": True,
         "native_audio_clips": 0,
         "native_plugin_devices": 0,
         "native_automation_lanes": 0,
@@ -169,6 +170,8 @@ def audit_native_flp_bundle(output_dir: str, source_path: str) -> dict:
         raise ValueError("Receipt omits source note expression/release evidence")
     if project.tempo is None or abs(project.tempo - graph["transport"]["bpm"]) > 0.01:
         raise ValueError("Native FLP tempo differs from the source project")
+    if read_native_meter(flp_path) != tuple(graph["transport"]["signature"]):
+        raise ValueError("Native FLP time signature differs from the source project")
 
     quantized = []
     for entry in assigned:
