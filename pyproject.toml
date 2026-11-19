@@ -31,6 +31,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Optional offline native FLP reconstruction: MIT-licensed writer; Python 3.11+ only.
+# Do NOT import or bundle GPL FLP writers into the public MIT codebase.
+native-flp = ["flpkit==0.9.0; python_version >= '3.11'"]
 dev = [
     "fl-studio-api-stubs>=37.0",
     "pytest>=8.0",

@@ -33,6 +33,7 @@ from fl_studio_mcp.tools import (
     register_project_file_tools,
     register_transport_tools,
     register_ui_tools,
+    register_universal_project_tools,
 )
 from fl_studio_mcp.utils.connection import get_connection, reset_connection
 
@@ -60,6 +61,10 @@ Available tool categories:
 - Windows: Show, hide and focus FL Studio windows; retarget the piano roll
 - Project snapshot: Whole-project overview in one round-trip
 - Native files: Read-only FLP/FST/ZIP notes, clips, channels and mixer inventory (offline)
+- Universal projects: DAWproject 1.0 graph, reconstruction bundle, optional
+  native FLP from a provided blank FL-authored template, and independent
+  source-to-FLP semantic fidelity audit. Offline readback ONLY: actual
+  FL Studio application open/save/reopen remains unverified.
 
 Important limitations:
 1. Effects can be loaded into mixer slots, but new instruments cannot be added to the channel rack.
@@ -165,6 +170,7 @@ register_playlist_tools(mcp)
 register_compose_tools(mcp)
 register_music_tools(mcp)
 register_project_file_tools(mcp)
+register_universal_project_tools(mcp)
 
 
 def main():
